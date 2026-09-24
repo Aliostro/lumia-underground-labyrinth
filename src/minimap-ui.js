@@ -54,13 +54,13 @@ class MinimapUi {
     ));
     this.marker.clear();
     this.marker.fillStyle(0x3d9b57);
+    this.marker.lineStyle(0.5, 0x000000);
     this.scene.floorItems.forEach((item) => {
       if (item.marker.visible) {
-        this.marker.fillCircle(
-          originX + (item.tileX + 0.5) * scale,
-          originY + (item.tileY + 0.5) * scale,
-          markerRadius,
-        );
+        const itemX = originX + (item.tileX + 0.5) * scale;
+        const itemY = originY + (item.tileY + 0.5) * scale;
+        this.marker.fillCircle(itemX, itemY, markerRadius);
+        this.marker.strokeCircle(itemX, itemY, markerRadius);
       }
     });
     this.marker.lineStyle(2, 0xffffff);

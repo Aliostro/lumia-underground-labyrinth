@@ -37,6 +37,10 @@ const InventoryUiBehavior = {
       .setDisplaySize(28, 28)
       .setVisible(false)
       .setName(`inventory-icon-${index}`));
+    this.inventoryRecipeResultIcons = Array.from({ length: 10 }, (_, index) => this.add.image(0, 0, 'item-icon-junk')
+      .setDisplaySize(20, 20)
+      .setVisible(false)
+      .setName(`inventory-recipe-result-icon-${index}`));
     this.inventoryDescriptionText = this.add.text(panelX + 30, panelY + 482, '', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
@@ -54,6 +58,7 @@ const InventoryUiBehavior = {
       this.inventoryPageText,
       this.inventorySlotGraphics,
       ...this.inventoryItemIcons,
+      ...this.inventoryRecipeResultIcons,
       ...this.inventoryItemTexts,
       this.inventoryDescriptionText,
     ])
@@ -119,15 +124,40 @@ const InventoryUiBehavior = {
       }
       icon.setTint(disabled ? 0x69747c : 0xffffff);
       const useCount = item?.usesRemaining != null ? ` (${item.usesRemaining})` : '';
-      const itemName = item?.equipped != null ? `[装備中] ${definition.name}${useCount}` : `${definition?.name ?? ''}${useCount}`;
+      const recipeResultDefinition = definition?.category === 80
+        ? this.getRecipeResultDefinition(definition)
+        : null;
+      const recipeNamePrefix = recipeResultDefinition
+        ? definition.name.slice(0, -'のレシピ'.length)
+        : '';
+      const recipeName = recipeResultDefinition
+        ? `${recipeNamePrefix}　のレシピ`
+        : definition?.name ?? '';
+      const itemName = item?.equipped != null ? `[装備中] ${recipeName}${useCount}` : `${recipeName}${useCount}`;
       const disabledLabel = craftingMaterial ? '[選択済み]' : craftingUnavailable ? '[製作不可]' : '';
+      const recipePrefixWidth = recipeResultDefinition ? text.setText(recipeNamePrefix).width : 0;
       text.setPosition(x + 48, y + 7).setText(disabled ? `${itemName} ${disabledLabel}` : itemName);
       text.setColor(disabled ? '#7f8c95' : item ? '#f3f1e8' : '#607785');
+      const recipeIcon = this.inventoryRecipeResultIcons[row];
+      recipeIcon.setVisible(Boolean(recipeResultDefinition));
+      if (recipeResultDefinition) {
+        recipeIcon
+          .setTexture(ITEM_ICON_KEYS[recipeResultDefinition.category] || ITEM_ICON_KEYS[90])
+          .setPosition(x + 48 + recipePrefixWidth + 10, y + 17)
+          .setTint(disabled ? 0x69747c : 0xffffff);
+      }
     });
     const selectedItem = this.getSelectedInventoryItem();
     const selectedDefinition = selectedItem && this.itemDefinitions.get(selectedItem.id);
     this.inventoryDescriptionText.setText(selectedDefinition?.description ?? '空き枠');
     this.refreshInventoryBorder();
+  },
+
+  getRecipeResultDefinition(recipeDefinition) {
+    const resultName = recipeDefinition.name.replace(/のレシピ$/, '');
+    return [...this.itemDefinitions.values()].find((definition) => (
+      definition.category !== 80 && definition.name === resultName
+    ));
   },
 
   refreshInventoryBorder() {

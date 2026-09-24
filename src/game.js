@@ -324,15 +324,16 @@ class DungeonTestScene extends Phaser.Scene {
         }
         if (this.isMoveKey(event.code)) {
           event.preventDefault();
+          const inputDirection = this.getDirectionForKey(event.code);
+          if (this.rangedAttackKey.isDown && this.queueRangedAttackDirection(inputDirection)) {
+            return;
+          }
           const direction = this.playerStatus.confusionTurns > 0
             ? Phaser.Utils.Array.GetRandom(MOVE_DIRECTIONS)
-            : this.getDirectionForKey(event.code);
+            : inputDirection;
           if (this.playerStatus.confusionTurns > 0) {
             this.dashDirection = null;
             this.queueMove(MOVE_INPUT_GRACE_MS, true, direction, false, true, true);
-            return;
-          }
-          if (this.rangedAttackKey.isDown && this.queueRangedAttackDirection(direction)) {
             return;
           }
           if (event.shiftKey) {
@@ -1166,7 +1167,7 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('PLAYER_SLOW_ENDED');
         return;
       }
-      this.playerStatus.speedTurns = HASTE_TURN_COUNT;
+      this.playerStatus.speedTurns = HASTE_HERB_TURN_COUNT;
       this.playerStatus.hasteExtraAction = false;
       this.actionLog.add('PLAYER_HASTED');
       return;
@@ -1191,7 +1192,7 @@ class DungeonTestScene extends Phaser.Scene {
       && this.playerStatus.sleepTurns === 0
       && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY)
     ) {
-      this.playerStatus.sleepTurns = SLEEP_TURN_COUNT;
+      this.playerStatus.sleepTurns = ITEM_SLEEP_TURN_COUNT;
       this.heroSleepText.setVisible(true);
       this.actionLog.add('PLAYER_FELL_ASLEEP');
       return;
@@ -1709,7 +1710,7 @@ class DungeonTestScene extends Phaser.Scene {
       if (Math.max(Math.abs(enemy.tileX - target.tileX), Math.abs(enemy.tileY - target.tileY)) > 1) {
         return;
       }
-      this.applySleepToEnemy(enemy);
+      this.applySleepToEnemy(enemy, ITEM_SLEEP_TURN_COUNT);
     });
   }
 
@@ -1827,7 +1828,7 @@ class DungeonTestScene extends Phaser.Scene {
       return;
     }
     if (definition.useEffectId === ITEM_EFFECT_SLEEP) {
-      this.applySleepToEnemy(enemy);
+      this.applySleepToEnemy(enemy, ITEM_SLEEP_TURN_COUNT);
       return;
     }
     const hitPointsBefore = enemy.hitPoints;
@@ -1842,13 +1843,13 @@ class DungeonTestScene extends Phaser.Scene {
     }
   }
 
-  applySleepToEnemy(enemy) {
+  applySleepToEnemy(enemy, sleepTurns = SLEEP_TURN_COUNT) {
     if (enemy.status != null) {
       return false;
     }
     enemy.idleTween?.stop();
     enemy.status = 'sleep';
-    enemy.sleepTurns = SLEEP_TURN_COUNT;
+    enemy.sleepTurns = sleepTurns;
     enemy.sleepText.setVisible(true);
     this.sleepAppliedEnemies ||= new Set();
     this.sleepAppliedEnemies.add(enemy);
