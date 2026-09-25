@@ -32,7 +32,7 @@ const EnemySystem = {
       }
       const enemies = this.enemies.filter((enemy) => this.getRoomAt(enemy.tileX, enemy.tileY) === room);
       const openTiles = tiles.filter((tile) => !this.isTileOccupied(tile.x, tile.y));
-      const targetCount = Math.ceil(tiles.length * 0.66);
+      const targetCount = Math.ceil(tiles.length * 0.5);
       return { room, tiles, enemies, openTiles, targetCount };
     }).filter((candidate) => (
       candidate.room !== heroRoom

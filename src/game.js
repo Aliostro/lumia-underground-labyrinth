@@ -87,7 +87,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('symbol-demi', 'assets/image/SymbolDemi.png');
     this.load.image('symbol-eta', 'assets/image/SymbolEta.png');
     this.load.image('item-icon-sword', 'assets/image/IconSword.png');
-    this.load.image('item-icon-bow', 'assets/image/IconBow.png');
+    this.load.image('item-icon-bow', 'assets/image/IconBow.png?v=2');
     this.load.image('item-icon-armor', 'assets/image/IconArmor.png');
     this.load.image('item-icon-acce', 'assets/image/IconAcce.png');
     this.load.image('item-icon-food', 'assets/image/IconFood.png');
@@ -200,6 +200,7 @@ class DungeonTestScene extends Phaser.Scene {
       stroke: '#17212a',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(this.hero.depth + 1).setVisible(false);
+    this.diagonalInputIndicators = this.add.graphics().setDepth(this.hero.depth + 2).setVisible(false);
     this.updateHeroDepth(this.heroTileY);
     this.startIdleMotion();
     this.spawnStairs();
@@ -215,6 +216,7 @@ class DungeonTestScene extends Phaser.Scene {
 
     this.moveKeys = this.input.keyboard.addKeys('UP,DOWN,LEFT,RIGHT');
     this.rangedAttackKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this.diagonalOnlyKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL);
     this.dashDirection = null;
     this.game.canvas.setAttribute('tabindex', '0');
     this.game.canvas.focus();
@@ -571,6 +573,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.heroHasteText?.setDepth(this.hero.depth + 1);
     this.heroSlowText?.setDepth(this.hero.depth + 1);
     this.heroParalysisText?.setDepth(this.hero.depth + 1);
+    this.diagonalInputIndicators?.setDepth(this.hero.depth + 2);
   }
 
   createVisibilityOverlay() {
@@ -631,6 +634,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   update() {
+    this.updateDiagonalInputIndicators();
     if (this.actionLog?.historyVisible) {
       const direction = this.moveKeys.UP.isDown ? 1 : this.moveKeys.DOWN.isDown ? -1 : 0;
       if (direction === 0) {
@@ -649,6 +653,48 @@ class DungeonTestScene extends Phaser.Scene {
     if (this.isHeroMoving && !this.isAttackAnimating && !this.springTrapWarpPending) {
       this.updateVisibility();
     }
+  }
+
+  updateDiagonalInputIndicators() {
+    if (!this.diagonalOnlyKey?.isDown) {
+      this.diagonalInputIndicators.setVisible(false);
+      return;
+    }
+    const centerX = this.hero.x;
+    const centerY = this.hero.y - TILE_SIZE / 2;
+    const arrowDistance = TILE_SIZE * 0.42;
+    const arrowHeadSize = 9;
+    this.diagonalInputIndicators.clear().setVisible(true);
+    this.diagonalInputIndicators.lineStyle(3, 0xffdc4a, 0.95);
+    [
+      { x: -1, y: -1 },
+      { x: 1, y: -1 },
+      { x: -1, y: 1 },
+      { x: 1, y: 1 },
+    ].forEach((direction) => {
+      const length = Math.hypot(direction.x, direction.y);
+      const unitX = direction.x / length;
+      const unitY = direction.y / length;
+      const startX = centerX + unitX * 14;
+      const startY = centerY + unitY * 14;
+      const endX = centerX + unitX * arrowDistance;
+      const endY = centerY + unitY * arrowDistance;
+      const perpendicularX = -unitY;
+      const perpendicularY = unitX;
+      this.diagonalInputIndicators.lineBetween(startX, startY, endX, endY);
+      this.diagonalInputIndicators.lineBetween(
+        endX,
+        endY,
+        endX - unitX * arrowHeadSize + perpendicularX * arrowHeadSize,
+        endY - unitY * arrowHeadSize + perpendicularY * arrowHeadSize,
+      );
+      this.diagonalInputIndicators.lineBetween(
+        endX,
+        endY,
+        endX - unitX * arrowHeadSize - perpendicularX * arrowHeadSize,
+        endY - unitY * arrowHeadSize - perpendicularY * arrowHeadSize,
+      );
+    });
   }
 
   updateStatusMarkers() {
@@ -990,6 +1036,7 @@ class DungeonTestScene extends Phaser.Scene {
         definition.useEffectId === ITEM_EFFECT_SLEEP_GAS
         || definition.useEffectId === ITEM_EFFECT_VOLTICLET
         || definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP
+        || definition.useEffectId === ITEM_EFFECT_SLOW_POWDER
       )
     ) {
       this.pendingThrow = {
@@ -999,6 +1046,7 @@ class DungeonTestScene extends Phaser.Scene {
         sleepGas: definition.useEffectId === ITEM_EFFECT_SLEEP_GAS,
         volticlet: definition.useEffectId === ITEM_EFFECT_VOLTICLET,
         directionalWarp: definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP,
+        slowPowder: definition.useEffectId === ITEM_EFFECT_SLOW_POWDER,
       };
       this.inventoryUi.setVisible(false);
       this.closeInventoryMenu();
@@ -1267,6 +1315,7 @@ class DungeonTestScene extends Phaser.Scene {
       sleepGas,
       volticlet,
       directionalWarp,
+      slowPowder,
     } = this.pendingThrow;
     this.pendingThrow = null;
     if (fromFloor ? this.getFloorItemAt(this.heroTileX, this.heroTileY) !== item : !this.playerStatus.inventory.includes(item)) {
@@ -1277,11 +1326,11 @@ class DungeonTestScene extends Phaser.Scene {
       this.useDirectionalWarp(item, definition, direction);
       return;
     }
-    if (sleepGas || volticlet) {
+    if (sleepGas || volticlet || slowPowder) {
       this.playSfx('se-use');
     }
     this.playSfx('se-throw');
-    if (!sleepGas && !volticlet) {
+    if (!sleepGas && !volticlet && !slowPowder) {
       this.removeInventoryOrFloorItem(item);
     }
     const throwResult = volticlet
@@ -1290,7 +1339,7 @@ class DungeonTestScene extends Phaser.Scene {
     const { destination } = throwResult;
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
     this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
-    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet ? '撃った' : '投げた' });
+    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder ? '撃った' : '投げた' });
     this.isHeroMoving = true;
     this.idleTween.stop();
     this.hero.setScale(HERO_SCALE);
@@ -1310,6 +1359,13 @@ class DungeonTestScene extends Phaser.Scene {
         if (sleepGas) {
           if (throwResult.enemy) {
             this.applySleepGas(throwResult.enemy);
+          }
+          if (this.consumeDeviceUse(item)) {
+            this.removeInventoryOrFloorItem(item);
+          }
+        } else if (slowPowder) {
+          if (throwResult.enemy) {
+            this.applySlowPowder(throwResult.enemy);
           }
           if (this.consumeDeviceUse(item)) {
             this.removeInventoryOrFloorItem(item);
@@ -1711,6 +1767,23 @@ class DungeonTestScene extends Phaser.Scene {
         return;
       }
       this.applySleepToEnemy(enemy, ITEM_SLEEP_TURN_COUNT);
+    });
+  }
+
+  applySlowPowder(target) {
+    this.enemies.forEach((enemy) => {
+      if (Math.max(Math.abs(enemy.tileX - target.tileX), Math.abs(enemy.tileY - target.tileY)) > 1) {
+        return;
+      }
+      if (enemy.speedTurns > 0) {
+        enemy.speedTurns = 0;
+        return;
+      }
+      enemy.slowTurns = SLOW_TURN_COUNT;
+      enemy.slowSkipNextTurn = true;
+      if (this.getVisibleTiles(this.heroTileX, this.heroTileY).has(`${enemy.tileX},${enemy.tileY}`)) {
+        this.actionLog.add('ENEMY_SLOWED', { enemy: this.getEnemyLogName(enemy) });
+      }
     });
   }
 
@@ -2374,6 +2447,10 @@ class DungeonTestScene extends Phaser.Scene {
     return directions[code];
   }
 
+  acceptsDirection(direction) {
+    return !this.diagonalOnlyKey.isDown || (direction.x !== 0 && direction.y !== 0);
+  }
+
   queueThrowDirection(direction) {
     if (this.queuedThrowDirection) {
       this.queuedThrowVector = {
@@ -2390,6 +2467,9 @@ class DungeonTestScene extends Phaser.Scene {
         ? heldDirection
         : this.queuedThrowVector;
       this.queuedThrowVector = null;
+      if (!this.acceptsDirection(directionToThrow)) {
+        return;
+      }
       this.throwPendingItem(directionToThrow);
     });
   }
@@ -2413,6 +2493,9 @@ class DungeonTestScene extends Phaser.Scene {
         ? heldDirection
         : this.queuedRangedAttackVector;
       this.queuedRangedAttackVector = null;
+      if (!this.acceptsDirection(directionToShoot)) {
+        return;
+      }
       this.shootEquippedRangedWeapon(directionToShoot);
     });
     return true;
@@ -2450,6 +2533,10 @@ class DungeonTestScene extends Phaser.Scene {
         ? heldDirection
         : this.queuedMoveDirection;
       this.queuedMoveDirection = null;
+      if (!this.acceptsDirection(movementDirection)) {
+        this.dashDirection = null;
+        return;
+      }
       if (isDashing) {
         this.dashDirection = movementDirection;
       }
@@ -2809,7 +2896,12 @@ class DungeonTestScene extends Phaser.Scene {
 
   playerAttack(enemy, ranged = false) {
     this.wakeSpawnSleepingEnemy(enemy);
-    const damage = Math.max(1, this.playerStatus.attack - enemy.defense);
+    const rangedAttackBonus = !ranged
+      ? 0
+      : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATER_RANGED_ATTACK_INCREASE)
+        ? 10
+        : this.hasEquipEffect(ITEM_EQUIP_EFFECT_RANGED_ATTACK_INCREASE) ? 5 : 0;
+    const damage = Math.max(1, this.playerStatus.attack + rangedAttackBonus - enemy.defense);
     const hit = !ranged || !this.evadesProjectile(enemy)
       ? this.isAttackHit(NORMAL_ATTACK_ACCURACY)
       : false;
@@ -2929,6 +3021,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.confusionEndedEnemies = new Set();
     this.peaceAppliedEnemies ||= new Set();
     for (const enemy of [...this.enemies]) {
+      if (!this.enemies.includes(enemy)) {
+        continue;
+      }
       if (enemy.disguised) {
         continue;
       }
@@ -3437,12 +3532,45 @@ class DungeonTestScene extends Phaser.Scene {
     attacks.push({
       sprite: enemy.sprite,
       targetsHero: true,
-      onStartOnly: true,
-      onStart: () => {
+      onStartAsync: true,
+      onStart: (complete) => {
+        this.playSfx('se-gravity');
         this.actionLog.add('ENEMY_KIARA_BRAND', { enemy: this.getEnemyLogName(enemy) });
+        this.playKiaraBrandEffect(complete);
       },
     });
     return true;
+  }
+
+  playKiaraBrandEffect(onComplete) {
+    const effect = this.add.graphics().setDepth(FOG_DEPTH - 1);
+    const radius = TILE_SIZE * 0.31;
+    effect.lineStyle(4, 0x5b1675, 0.95);
+    effect.strokeCircle(0, 0, radius);
+    effect.lineStyle(2, 0xe1a3ff, 0.9);
+    effect.strokeCircle(0, 0, radius * 0.62);
+    effect.lineBetween(-radius, 0, radius, 0);
+    effect.lineBetween(0, -radius, 0, radius);
+    effect.lineBetween(-radius * 0.7, -radius * 0.7, radius * 0.7, radius * 0.7);
+    effect.lineBetween(radius * 0.7, -radius * 0.7, -radius * 0.7, radius * 0.7);
+    effect.fillStyle(0x1b0528, 0.68);
+    effect.fillCircle(0, 0, radius * 0.36);
+    effect.setPosition(
+      (this.heroTileX + 0.5) * TILE_SIZE,
+      (this.heroTileY + 0.5) * TILE_SIZE,
+    ).setScale(0.25);
+    this.tweens.add({
+      targets: effect,
+      scale: 1.3,
+      angle: 180,
+      alpha: 0,
+      duration: 520,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        effect.destroy();
+        onComplete();
+      },
+    });
   }
 
   useZahirBrainwash(enemy, attacks) {
@@ -4121,16 +4249,16 @@ class DungeonTestScene extends Phaser.Scene {
 
   resolveHyunwooCharge(enemy, target, collisionTarget) {
     this.dashDirection = null;
-    this.applyHyunwooChargeDamage(enemy, target, 20);
-    const collisionDamage = {
+    const damage = {
       [ENEMY_SKILL_GOLD_HYUNWOO_CHARGE]: 20,
-      [ENEMY_SKILL_MITHRIL_HYUNWOO_CHARGE]: 35,
-      [ENEMY_SKILL_ETA_HYUNWOO_CHARGE]: 50,
-    }[enemy.specialAbilityId] ?? 20;
+      [ENEMY_SKILL_MITHRIL_HYUNWOO_CHARGE]: 30,
+      [ENEMY_SKILL_ETA_HYUNWOO_CHARGE]: 40,
+    }[enemy.specialAbilityId];
+    this.applyHyunwooChargeDamage(enemy, target, damage);
     if (collisionTarget && collisionTarget !== this.hero && this.enemies.includes(collisionTarget)) {
-      this.applyHyunwooChargeDamage(enemy, collisionTarget, collisionDamage);
+      this.applyHyunwooChargeDamage(enemy, collisionTarget, damage);
     } else if (collisionTarget === this.hero) {
-      this.applyHyunwooChargeDamage(enemy, collisionTarget, collisionDamage);
+      this.applyHyunwooChargeDamage(enemy, collisionTarget, damage);
     }
     this.updateHeroDepth(this.heroTileY);
     this.updateStatusUi();
@@ -4160,10 +4288,10 @@ class DungeonTestScene extends Phaser.Scene {
 
   createCelineBombAttack(enemy) {
     const bombSettings = {
-      [ENEMY_SKILL_BOMB_THROW]: { range: 4, damage: 10 },
-      [ENEMY_SKILL_GOLD_CELINE_BOMB_THROW]: { range: 5, damage: 25 },
-      [ENEMY_SKILL_MITHRIL_CELINE_BOMB_THROW]: { range: 6, damage: 40 },
-      [ENEMY_SKILL_ETA_CELINE_BOMB_THROW]: { range: 7, damage: 60 },
+      [ENEMY_SKILL_BOMB_THROW]: { range: 3, damage: 10 },
+      [ENEMY_SKILL_GOLD_CELINE_BOMB_THROW]: { range: 4, damage: 20 },
+      [ENEMY_SKILL_MITHRIL_CELINE_BOMB_THROW]: { range: 5, damage: 30 },
+      [ENEMY_SKILL_ETA_CELINE_BOMB_THROW]: { range: 6, damage: 40 },
     };
     const settings = bombSettings[enemy.specialAbilityId];
     const distance = Math.max(
@@ -4933,21 +5061,25 @@ class DungeonTestScene extends Phaser.Scene {
     ) {
       return null;
     }
+    const theftPrevented = this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_IMMUNITY)
+      || this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_AND_TRANSFORMATION_IMMUNITY);
     const candidates = this.playerStatus.inventory.filter((item) => item.equipped == null);
-    const item = Phaser.Utils.Array.GetRandom(candidates);
+    const item = theftPrevented ? null : Phaser.Utils.Array.GetRandom(candidates);
     const currentRoom = this.getRoomAt(enemy.tileX, enemy.tileY);
     const destinations = this.dungeonRooms
       .filter((room) => room !== currentRoom)
       .map((room) => this.findOpenTileInRoom(room))
       .filter(Boolean);
     const destination = Phaser.Utils.Array.GetRandom(destinations);
-    if (!item || !destination) {
+    if (!destination || (!item && !theftPrevented)) {
       return null;
     }
-    const definition = this.itemDefinitions.get(item.id);
-    enemy.heldItem = { ...item };
-    this.removeInventoryOrFloorItem(item);
-    this.refreshInventoryUi();
+    const definition = item && this.itemDefinitions.get(item.id);
+    if (item) {
+      enemy.heldItem = { ...item };
+      this.removeInventoryOrFloorItem(item);
+      this.refreshInventoryUi();
+    }
     const movement = {
       enemy,
       fromX: enemy.sprite.x,
@@ -4963,10 +5095,14 @@ class DungeonTestScene extends Phaser.Scene {
     this.playEnemyWarpSfx();
     this.updateCharacterDepth(enemy.sprite, destination.y);
     this.updateEnemySymbolDepth(enemy);
-    this.actionLog.add('ENEMY_LAURA_THEFT', {
-      enemy: this.getEnemyLogName(enemy),
-      item: definition?.name ?? 'アイテム',
-    });
+    if (item) {
+      this.actionLog.add('ENEMY_LAURA_THEFT', {
+        enemy: this.getEnemyLogName(enemy),
+        item: definition?.name ?? 'アイテム',
+      });
+    } else {
+      this.actionLog.add('ENEMY_LAURA_THEFT_FAILED', { enemy: this.getEnemyLogName(enemy) });
+    }
     return movement;
   }
 
@@ -5452,8 +5588,8 @@ class DungeonTestScene extends Phaser.Scene {
     if (!this.isEva(enemy)) {
       return visibleTiles;
     }
-    for (let y = enemy.tileY - 30; y <= enemy.tileY + 30; y += 1) {
-      for (let x = enemy.tileX - 30; x <= enemy.tileX + 30; x += 1) {
+    for (let y = enemy.tileY - 20; y <= enemy.tileY + 20; y += 1) {
+      for (let x = enemy.tileX - 20; x <= enemy.tileX + 20; x += 1) {
         if (this.dungeonTiles[y]?.[x] !== undefined) {
           visibleTiles.add(`${x},${y}`);
         }

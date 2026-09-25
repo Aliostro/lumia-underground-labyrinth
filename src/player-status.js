@@ -25,6 +25,7 @@ class PlayerStatus {
     this.brainwashed = false;
     this.peaceTurns = 0;
     this.trapAvoidance = false;
+    this.equipmentMaxHitPointBonus = 0;
     this.inventory = [];
     this.inventoryCapacity = 20;
   }
@@ -55,6 +56,10 @@ class PlayerStatus {
     item.equipped = definition.category;
     item.equipmentAttack = definition.attack;
     item.equipmentDefense = definition.defense;
+    item.equipmentMaxHitPointBonus = {
+      [ITEM_EQUIP_EFFECT_MAX_HIT_POINTS]: 15,
+      [ITEM_EQUIP_EFFECT_GREATER_MAX_HIT_POINTS]: 30,
+    }[definition.equipEffectId] ?? 0;
     this.updateEquipmentStats();
   }
 
@@ -66,13 +71,18 @@ class PlayerStatus {
   updateEquipmentStats() {
     this.attack = this.baseAttack;
     this.defense = this.baseDefense;
+    let equipmentMaxHitPointBonus = 0;
     this.inventory.forEach((item) => {
       if (item.equipped == null) {
         return;
       }
       this.attack += Number(item.equipmentAttack) || 0;
       this.defense += Number(item.equipmentDefense) || 0;
+      equipmentMaxHitPointBonus += Number(item.equipmentMaxHitPointBonus) || 0;
     });
+    this.maxHitPoints += equipmentMaxHitPointBonus - this.equipmentMaxHitPointBonus;
+    this.equipmentMaxHitPointBonus = equipmentMaxHitPointBonus;
+    this.hitPoints = Math.min(this.hitPoints, this.maxHitPoints);
   }
 
   getLevelExperienceRequirement(level) {

@@ -98,6 +98,7 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-wana-set', 'assets/audio/SEWanaSet.mp3');
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
+    this.load.text('version-data', `assets/data/version.txt?v=${Date.now()}`);
   }
 
   create() {
@@ -110,6 +111,11 @@ class TitleScene extends Phaser.Scene {
       stroke: '#05080c',
       strokeThickness: 8,
     }).setOrigin(0.5);
+    this.add.text(GAME_WIDTH - 24, GAME_HEIGHT - 22, `ver. ${this.cache.text.get('version-data')?.trim() || '0.0.0'}`, {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '18px',
+      color: '#9ab5c7',
+    }).setOrigin(1, 1);
     this.add.text(GAME_WIDTH / 2, 315, 'メニュー', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '24px',

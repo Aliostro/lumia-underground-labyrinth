@@ -28,6 +28,7 @@
 "ENEMY_LUKE_PICKUP","{enemy}は{item}を拾った。"
 "ENEMY_LUKE_DROPPED","{enemy}は{item}を落とした。"
 "ENEMY_LAURA_THEFT","{enemy}は{item}を盗んで逃げた！"
+"ENEMY_LAURA_THEFT_FAILED","{enemy}は盗めずに逃げた！"
 "ENEMY_BARBARA_MODIFICATION","{enemy}は{item}を改造して{result}にした！"
 "ENEMY_MARKUS_CRITICAL_HIT","{enemy}は痛恨の一撃を放った！"
 "ENEMY_EMMA_REVEALED","{enemy}「ジャジャーン！マジシャン登場！」"

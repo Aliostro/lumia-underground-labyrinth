@@ -183,6 +183,7 @@ const EnemyAbilities = {
     if (
       mealTimeChance === 0
       || !this.isEnemyAdjacent(enemy)
+      || this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_AND_TRANSFORMATION_IMMUNITY)
       || Math.random() >= mealTimeChance
     ) {
       return false;
@@ -214,6 +215,7 @@ const EnemyAbilities = {
     if (
       enemy.specialAbilityId !== ENEMY_SKILL_BARBARA_MODIFICATION
       || !this.isEnemyAdjacent(enemy)
+      || this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_AND_TRANSFORMATION_IMMUNITY)
       || Math.random() >= 0.3
     ) {
       return false;
@@ -255,9 +257,9 @@ const EnemyAbilities = {
   createJustynaLaser(enemy) {
     const laserSettings = {
       [ENEMY_SKILL_JUSTYNA_LASER]: { range: 10, chance: 0.2, damage: 15 },
-      [ENEMY_SKILL_GOLD_JUSTYNA_LASER]: { range: 10, chance: 0.2, damage: 30 },
-      [ENEMY_SKILL_MITHRIL_JUSTYNA_LASER]: { range: 20, chance: 0.3, damage: 40 },
-      [ENEMY_SKILL_ETA_JUSTYNA_LASER]: { range: Infinity, chance: 0.4, damage: 50 },
+      [ENEMY_SKILL_GOLD_JUSTYNA_LASER]: { range: 10, chance: 0.2, damage: 25 },
+      [ENEMY_SKILL_MITHRIL_JUSTYNA_LASER]: { range: 20, chance: 0.3, damage: 30 },
+      [ENEMY_SKILL_ETA_JUSTYNA_LASER]: { range: Infinity, chance: 0.4, damage: 40 },
     };
     const settings = laserSettings[enemy.specialAbilityId];
     if (!settings || Math.random() >= settings.chance) {
@@ -397,9 +399,9 @@ const EnemyAbilities = {
   resolveAidenElectricBurst(enemy) {
     const damage = {
       [ENEMY_SKILL_AIDEN_ELECTRIC_BURST]: 20,
-      [ENEMY_SKILL_GOLD_AIDEN_ELECTRIC_BURST]: 40,
-      [ENEMY_SKILL_MITHRIL_AIDEN_ELECTRIC_BURST]: 60,
-      [ENEMY_SKILL_ETA_AIDEN_ELECTRIC_BURST]: 80,
+      [ENEMY_SKILL_GOLD_AIDEN_ELECTRIC_BURST]: 30,
+      [ENEMY_SKILL_MITHRIL_AIDEN_ELECTRIC_BURST]: 40,
+      [ENEMY_SKILL_ETA_AIDEN_ELECTRIC_BURST]: 50,
     }[enemy.specialAbilityId];
     const actualDamage = this.applyHeroDamage(damage, this.getEnemyLogName(enemy));
     this.dashDirection = null;
