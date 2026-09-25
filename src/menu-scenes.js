@@ -99,6 +99,16 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
     this.load.text('version-data', `assets/data/version.txt?v=${Date.now()}`);
+    this.load.text('item-data', 'assets/data/item.csv');
+    this.load.image('item-icon-sword', 'assets/image/IconSword.png');
+    this.load.image('item-icon-bow', 'assets/image/IconBow.png?v=2');
+    this.load.image('item-icon-armor', 'assets/image/IconArmor.png');
+    this.load.image('item-icon-acce', 'assets/image/IconAcce.png');
+    this.load.image('item-icon-food', 'assets/image/IconFood.png');
+    this.load.image('item-icon-device', 'assets/image/IconDevice.png');
+    this.load.image('item-icon-herb', 'assets/image/IconHerb.png');
+    this.load.image('item-icon-recipe', 'assets/image/IconRecipe.png');
+    this.load.image('item-icon-junk', 'assets/image/IconJunk.png');
   }
 
   create() {
@@ -122,15 +132,18 @@ class TitleScene extends Phaser.Scene {
       color: '#9ab5c7',
     }).setOrigin(0.5);
     this.titleSelection = 0;
+    this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
+    this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.titleMenuItems = [
       this.createTitleMenuItem(390, '地下30階モード', () => {
         this.sound.play('se-cursor-enter');
         this.scene.start('DungeonTestScene', { newRun: true });
       }),
-      this.createTitleMenuItem(468, 'オプション', () => this.openOptionsMenu()),
+      this.createTitleMenuItem(468, 'レシピ図鑑', () => this.openRecipeBook()),
+      this.createTitleMenuItem(546, 'オプション', () => this.openOptionsMenu()),
     ];
     this.updateTitleMenuSelection();
-    this.add.text(GAME_WIDTH / 2, 570, '上下キー: 選択    Zキー: 決定', {
+    this.add.text(GAME_WIDTH / 2, 650, '上下キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
       color: '#f3f1e8',
@@ -141,6 +154,12 @@ class TitleScene extends Phaser.Scene {
       }
       if (this.optionWindowVisible) {
         this.handleOptionsInput(event.code);
+        return;
+      }
+      if (this.recipeBook.container.visible) {
+        if (this.recipeBook.handleInput(event.code)) {
+          this.sound.play(['ArrowUp', 'ArrowDown', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+        }
         return;
       }
       if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
@@ -222,6 +241,11 @@ class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(12);
     this.optionWindowObjects = [overlay, panel, title, label, this.optionVolumeTrack, this.optionVolumeFill, this.optionVolumeValue, hint];
     this.updateSfxVolumeDisplay();
+  }
+
+  openRecipeBook() {
+    this.sound.play('se-cursor-enter');
+    this.recipeBook.open();
   }
 
   closeOptionsMenu() {

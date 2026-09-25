@@ -99,6 +99,8 @@
 "ITEM_CRAFT_SELECT","{item}と組み合わせるアイテムを選んでください。"
 "ITEM_CRAFT_SUCCESS","{first}と{second}を使って、{item}を作った！"
 "ITEM_CRAFT_FAILURE","うまく作れなかった！{first}と{second}は消失した。"
+"RECIPE_REGISTERED","{item}をレシピ図鑑に登録した！"
+"RECIPE_ALREADY_REGISTERED","{item}は既にレシピ図鑑へ登録済みだ。"
 "ITEM_ATE","{item}を食べた。"
 "ITEM_USED","{item}を使った。"
 "ITEM_DEPLETED","{item}を使い切った。"

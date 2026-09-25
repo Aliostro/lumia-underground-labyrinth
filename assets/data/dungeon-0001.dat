@@ -2,8 +2,8 @@ dungeon-name  = "ルミア島の地下迷宮"
 max-floor     = 30
 max-enemies   = 60
 
-start-level   = 1
-start-floor   = 1
+start-level   = 999
+start-floor   = 5
 start-item    = 4004
 
 [design-map]

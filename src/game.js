@@ -95,6 +95,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('item-icon-herb', 'assets/image/IconHerb.png');
     this.load.image('item-icon-recipe', 'assets/image/IconRecipe.png');
     this.load.image('item-icon-junk', 'assets/image/IconJunk.png');
+    this.load.image('item-icon-flower', 'assets/image/IconFlower.png');
   }
 
   create(data) {
@@ -225,6 +226,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.createMinimap();
     this.createInventoryUi();
     this.createStairMenuUi();
+    this.recipeBook = new RecipeBook(this, this.itemDefinitions);
     this.actionLog = new ActionLog(this, this.messageData, () => this.floorTurn);
     this.messageLogScrollDirection = 0;
     this.messageLogScrollNextAt = 0;
@@ -265,6 +267,12 @@ class DungeonTestScene extends Phaser.Scene {
         }
         return;
       }
+      if (this.recipeBook.container.visible) {
+        if (this.recipeBook.handleInput(event.code)) {
+          this.playSfx(['ArrowUp', 'ArrowDown', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+        }
+        return;
+      }
       if (this.playerStatus.brainwashed && !this.isHeroMoving && !this.queuedMove && !this.pendingThrow) {
         this.forceBrainwashedAction();
         return;
@@ -281,6 +289,17 @@ class DungeonTestScene extends Phaser.Scene {
       ) {
         this.playSfx('se-cursor-enter');
         this.actionLog.toggleHistory();
+        this.cancelQueuedMove();
+        return;
+      }
+      if (
+        event.code === 'KeyD'
+        && !this.inventoryUi.visible
+        && !this.pendingThrow
+        && !this.mapOverlay.visible
+      ) {
+        this.playSfx('se-cursor-enter');
+        this.recipeBook.open();
         this.cancelQueuedMove();
         return;
       }
@@ -1021,6 +1040,21 @@ class DungeonTestScene extends Phaser.Scene {
     }
     if (action === '交換') {
       this.exchangeInventoryItemWithFloorItem(item);
+      return;
+    }
+    if (action === '登録') {
+      if (!RecipeBook.register(item.id)) {
+        this.actionLog.add('RECIPE_ALREADY_REGISTERED', { item: definition.name });
+        this.closeInventoryMenu();
+        return;
+      }
+      this.removeInventoryOrFloorItem(item);
+      this.actionLog.add('RECIPE_REGISTERED', { item: definition.name });
+      this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventory.length);
+      this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
+      this.refreshInventoryUi();
+      this.closeInventoryMenu();
+      this.consumeItemTurn();
       return;
     }
     if (action === '投げる') {
@@ -1991,7 +2025,9 @@ class DungeonTestScene extends Phaser.Scene {
     ) {
       item.usesRemaining = Phaser.Math.Between(definition.useCountMinimum, definition.useCountMaximum);
     }
-    const iconKey = ITEM_ICON_KEYS[definition?.category] || ITEM_ICON_KEYS[90];
+    const iconKey = item.id === FLOWER_ITEM_ID
+      ? 'item-icon-flower'
+      : ITEM_ICON_KEYS[definition?.category] || ITEM_ICON_KEYS[90];
     const marker = this.add.image(
       (tileX + 0.5) * TILE_SIZE,
       (tileY + 0.5) * TILE_SIZE,
@@ -5359,7 +5395,7 @@ class DungeonTestScene extends Phaser.Scene {
       return false;
     }
     item.id = FLOWER_ITEM_ID;
-    item.marker.setTexture(ITEM_ICON_KEYS[90]).setTint(0xffffff);
+    item.marker.setTexture('item-icon-flower').setTint(0xffffff);
     this.playEnemyAlertSfx();
     this.actionLog.add('ENEMY_PRIYA_SINGS', { enemy: this.getEnemyLogName(enemy) });
     return true;

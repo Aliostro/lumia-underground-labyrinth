@@ -1,6 +1,6 @@
 const InventoryUiBehavior = {
   createInventoryUi() {
-    const panelWidth = 640;
+    const panelWidth = 760;
     const panelHeight = 580;
     const panelX = (GAME_WIDTH - panelWidth) / 2;
     const panelY = (GAME_HEIGHT - panelHeight) / 2;
@@ -16,13 +16,13 @@ const InventoryUiBehavior = {
       fontSize: '28px',
       color: '#f3f1e8',
     });
-    const capacity = this.add.text(panelX + 500, panelY + 26, '0 / 20', {
+    const capacity = this.add.text(panelX + 620, panelY + 26, '0 / 20', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#b7c6d3',
     });
     this.inventoryTitleText = title;
-    this.inventoryPageText = this.add.text(panelX + 292, panelY + 26, '1 / 2', {
+    this.inventoryPageText = this.add.text(panelX + 352, panelY + 26, '1 / 2', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#b7c6d3',
@@ -68,9 +68,9 @@ const InventoryUiBehavior = {
 
     const menuBackground = this.add.graphics();
     menuBackground.fillStyle(0x0b1118, 1);
-    menuBackground.fillRoundedRect(panelX + 390, panelY + 106, 190, 222, 6);
+    menuBackground.fillRoundedRect(panelX + 510, panelY + 106, 190, 222, 6);
     menuBackground.lineStyle(2, 0xd9b85a, 1);
-    menuBackground.strokeRoundedRect(panelX + 390, panelY + 106, 190, 222, 6);
+    menuBackground.strokeRoundedRect(panelX + 510, panelY + 106, 190, 222, 6);
     this.inventoryMenuTexts = Array.from({ length: 5 }, () => this.add.text(0, 0, '', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
@@ -87,9 +87,9 @@ const InventoryUiBehavior = {
   },
 
   refreshInventoryUi() {
-    const panelX = (GAME_WIDTH - 640) / 2;
+    const panelX = (GAME_WIDTH - 760) / 2;
     const panelY = (GAME_HEIGHT - 580) / 2;
-    const slotWidth = 580;
+    const slotWidth = 700;
     const slotHeight = 38;
     const slotStartX = panelX + 30;
     const slotStartY = panelY + 82;
@@ -131,7 +131,7 @@ const InventoryUiBehavior = {
         ? definition.name.slice(0, -'のレシピ'.length)
         : '';
       const recipeName = recipeResultDefinition
-        ? `${recipeNamePrefix}　のレシピ`
+        ? `${recipeNamePrefix}　　のレシピ`
         : definition?.name ?? '';
       const itemName = item?.equipped != null ? `[装備中] ${recipeName}${useCount}` : `${recipeName}${useCount}`;
       const disabledLabel = craftingMaterial ? '[選択済み]' : craftingUnavailable ? '[製作不可]' : '';
@@ -143,7 +143,7 @@ const InventoryUiBehavior = {
       if (recipeResultDefinition) {
         recipeIcon
           .setTexture(ITEM_ICON_KEYS[recipeResultDefinition.category] || ITEM_ICON_KEYS[90])
-          .setPosition(x + 48 + recipePrefixWidth + 10, y + 17)
+          .setPosition(x + 48 + recipePrefixWidth + 14, y + 17)
           .setTint(disabled ? 0x69747c : 0xffffff);
       }
     });
@@ -199,7 +199,7 @@ const InventoryUiBehavior = {
       } else if (definition.category === 50) {
         return ['拾う', '使う', '投げる', '製作'];
       } else if (definition.category === 80) {
-        return ['拾う', '投げる'];
+        return ['拾う', '登録', '投げる'];
       } else {
         return ['拾う', '投げる', '製作'];
       }
@@ -213,7 +213,7 @@ const InventoryUiBehavior = {
       const actions = ['使う', '置く', '投げる', '製作'];
       return this.canExchangeWithFloorItem() ? [...actions, '交換'] : actions;
     } else if (definition.category === 80) {
-      const actions = ['置く', '投げる'];
+      const actions = ['登録', '置く', '投げる'];
       return this.canExchangeWithFloorItem() ? [...actions, '交換'] : actions;
     }
     const actions = ['置く', '投げる', '製作'];
@@ -230,7 +230,7 @@ const InventoryUiBehavior = {
   },
 
   refreshInventoryMenu() {
-    const panelX = (GAME_WIDTH - 640) / 2;
+    const panelX = (GAME_WIDTH - 760) / 2;
     const panelY = (GAME_HEIGHT - 580) / 2;
     this.inventoryMenuGraphics.clear();
     this.inventoryMenuTexts.forEach((text, index) => {
@@ -238,9 +238,9 @@ const InventoryUiBehavior = {
       const y = panelY + 118 + index * 40;
       if (index < this.inventoryMenuActions.length) {
         this.inventoryMenuGraphics.fillStyle(selected ? 0x384d58 : 0x0b1118, 1);
-        this.inventoryMenuGraphics.fillRect(panelX + 400, y - 2, 170, 34);
+        this.inventoryMenuGraphics.fillRect(panelX + 520, y - 2, 170, 34);
       }
-      text.setPosition(panelX + 414, y + 3).setText(this.inventoryMenuActions[index] ?? '');
+      text.setPosition(panelX + 534, y + 3).setText(this.inventoryMenuActions[index] ?? '');
       text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
     });
   },
