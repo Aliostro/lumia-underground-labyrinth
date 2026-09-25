@@ -135,10 +135,10 @@ class TitleScene extends Phaser.Scene {
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.titleMenuItems = [
-      this.createTitleMenuItem(390, '地下30階モード', () => {
+      this.createTitleMenuItem(380, 'ルミア島の地下迷宮', () => {
         this.sound.play('se-cursor-enter');
         this.scene.start('DungeonTestScene', { newRun: true });
-      }),
+      }, '地下 30 階'),
       this.createTitleMenuItem(468, 'レシピ図鑑', () => this.openRecipeBook()),
       this.createTitleMenuItem(546, 'オプション', () => this.openOptionsMenu()),
     ];
@@ -178,24 +178,32 @@ class TitleScene extends Phaser.Scene {
     });
   }
 
-  createTitleMenuItem(y, label, action) {
-    const background = this.add.rectangle(GAME_WIDTH / 2, y, 420, 66, 0x384d58)
+  createTitleMenuItem(y, label, action, subtitle = '') {
+    const height = subtitle ? 84 : 66;
+    const background = this.add.rectangle(GAME_WIDTH / 2, y, 420, height, 0x384d58)
       .setStrokeStyle(2, 0x6e8996)
       .setInteractive({ useHandCursor: true });
-    const text = this.add.text(GAME_WIDTH / 2, y, label, {
+    const text = this.add.text(GAME_WIDTH / 2, y + (subtitle ? -12 : 0), label, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '30px',
       color: '#f3f1e8',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    const subtitleText = subtitle ? this.add.text(GAME_WIDTH / 2, y + 20, subtitle, {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '20px',
+      color: '#b7c6d3',
+    }).setOrigin(0.5).setResolution(2).setInteractive({ useHandCursor: true }) : null;
     const selectItem = () => {
       this.titleSelection = this.titleMenuItems.findIndex((item) => item.background === background);
       this.updateTitleMenuSelection();
     };
     background.on('pointerover', selectItem);
     text.on('pointerover', selectItem);
+    subtitleText?.on('pointerover', selectItem);
     background.on('pointerdown', action);
     text.on('pointerdown', action);
-    return { background, text, action };
+    subtitleText?.on('pointerdown', action);
+    return { background, text, subtitleText, action };
   }
 
   updateTitleMenuSelection() {
@@ -204,6 +212,7 @@ class TitleScene extends Phaser.Scene {
       item.background.setFillStyle(selected ? 0x4d6875 : 0x384d58);
       item.background.setStrokeStyle(2, selected ? 0xffdc4a : 0x6e8996);
       item.text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
+      item.subtitleText?.setColor(selected ? '#ffdc4a' : '#b7c6d3');
     });
   }
 

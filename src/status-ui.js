@@ -12,7 +12,7 @@ class StatusUi {
     const levelWidth = 120;
     const statWidth = 300;
     const combatStatWidth = 140;
-    const equipmentWidth = 260;
+    const equipmentWidth = 380;
     const equipmentHeight = 112;
     const gap = 8;
     const levelX = this.x + floorWidth + gap;

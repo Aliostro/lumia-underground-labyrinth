@@ -5691,10 +5691,19 @@ const config = {
   scene: [TitleScene, DungeonTestScene, ResultScene],
 };
 
-const startGame = () => new Phaser.Game(config);
+let gameStarted = false;
+const startGame = () => {
+  if (!gameStarted) {
+    gameStarted = true;
+    new Phaser.Game(config);
+  }
+};
 
-if (document.fonts?.load) {
-  document.fonts.load('16px "Yusei Magic"').then(startGame, startGame);
+if (document.fonts?.load && document.fonts.ready) {
+  Promise.all([
+    document.fonts.ready,
+    document.fonts.load('16px "Yusei Magic"'),
+  ]).then(() => requestAnimationFrame(startGame), startGame);
 } else {
   startGame();
 }
