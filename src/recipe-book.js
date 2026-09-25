@@ -54,7 +54,7 @@ class RecipeBook {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#cdd8df',
       wordWrap: { width: panelWidth - 56, useAdvancedWrap: true }, lineSpacing: 6,
     });
-    const hint = scene.add.text(GAME_WIDTH / 2, panelY + panelHeight - 30, '上下キー: 選択    Cキー: 並び替え    Xキー: 戻る', {
+    const hint = scene.add.text(GAME_WIDTH / 2, panelY + panelHeight - 30, '上下キー: 選択    左右キー: ページ    Cキー: 並び替え    Xキー: 戻る', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#9ab5c7',
     }).setOrigin(0.5);
     this.container = scene.add.container(0, 0, [
@@ -101,11 +101,26 @@ class RecipeBook {
       return true;
     }
     const recipes = this.recipes;
-    if (recipes.length === 0 || (code !== 'ArrowUp' && code !== 'ArrowDown')) {
+    if (
+      recipes.length === 0
+      || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)
+    ) {
       return false;
     }
-    this.selectedIndex = (this.selectedIndex + (code === 'ArrowUp' ? -1 : 1) + recipes.length) % recipes.length;
-    this.page = Math.floor(this.selectedIndex / this.rowsPerPage);
+    const pageCount = Math.ceil(recipes.length / this.rowsPerPage);
+    if (code === 'ArrowLeft' || code === 'ArrowRight') {
+      const selectedRow = this.selectedIndex % this.rowsPerPage;
+      this.page = (this.page + (code === 'ArrowRight' ? 1 : pageCount - 1)) % pageCount;
+      const pageStart = this.page * this.rowsPerPage;
+      const pageLength = Math.min(this.rowsPerPage, recipes.length - pageStart);
+      this.selectedIndex = pageStart + Math.min(selectedRow, pageLength - 1);
+    } else {
+      const pageStart = this.page * this.rowsPerPage;
+      const pageEnd = Math.min(recipes.length - 1, pageStart + this.rowsPerPage - 1);
+      this.selectedIndex = code === 'ArrowUp'
+        ? (this.selectedIndex === pageStart ? pageEnd : this.selectedIndex - 1)
+        : (this.selectedIndex === pageEnd ? pageStart : this.selectedIndex + 1);
+    }
     this.refresh();
     return true;
   }

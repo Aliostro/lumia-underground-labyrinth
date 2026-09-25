@@ -4,6 +4,8 @@ class DungeonGenerator {
     this.width = 64;
     this.height = 64;
     this.areaSize = 16;
+    this.areaColumns = 4;
+    this.areaRows = 4;
     this.minRooms = 8;
     this.maxRooms = 12;
   }
@@ -52,13 +54,13 @@ class DungeonGenerator {
   }
 
   createRooms() {
-    const areas = Array.from({ length: 16 }, (_, index) => index);
+    const areas = Array.from({ length: this.areaColumns * this.areaRows }, (_, index) => index);
     this.shuffle(areas);
 
     const roomCount = this.randomInt(this.minRooms, this.maxRooms);
     return areas.slice(0, roomCount).map((areaIndex) => {
-      const areaX = (areaIndex % 4) * this.areaSize;
-      const areaY = Math.floor(areaIndex / 4) * this.areaSize;
+      const areaX = (areaIndex % this.areaColumns) * this.areaSize;
+      const areaY = Math.floor(areaIndex / this.areaColumns) * this.areaSize;
       const width = this.randomInt(5, 12);
       const height = this.randomInt(5, 12);
       const x = this.randomInt(areaX + 1, areaX + this.areaSize - width - 1);

@@ -269,7 +269,7 @@ class DungeonTestScene extends Phaser.Scene {
       }
       if (this.recipeBook.container.visible) {
         if (this.recipeBook.handleInput(event.code)) {
-          this.playSfx(['ArrowUp', 'ArrowDown', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.playSfx(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
@@ -2704,8 +2704,10 @@ class DungeonTestScene extends Phaser.Scene {
     const dashStopsAtAreaTransition = isDashing && nextRoom !== currentRoom;
     const dashStopsAtCorridorContact = isDashing
       && nextRoom
-      && MOVE_DIRECTIONS.some((direction) => (
-        this.dungeonTiles[nextY + direction.y]?.[nextX + direction.x] === CORRIDOR_TILE
+      && [
+        [0, -1], [1, 0], [0, 1], [-1, 0],
+      ].some(([offsetX, offsetY]) => (
+        this.dungeonTiles[nextY + offsetY]?.[nextX + offsetX] === CORRIDOR_TILE
       ));
     const dashStopsAtCorridorBranch = isDashing && !nextRoom && this.hasCorridorBranch(nextX, nextY);
     if (

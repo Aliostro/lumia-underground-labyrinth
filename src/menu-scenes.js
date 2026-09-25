@@ -158,7 +158,7 @@ class TitleScene extends Phaser.Scene {
       }
       if (this.recipeBook.container.visible) {
         if (this.recipeBook.handleInput(event.code)) {
-          this.sound.play(['ArrowUp', 'ArrowDown', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.sound.play(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
