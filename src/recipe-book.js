@@ -114,8 +114,10 @@ class RecipeBook {
     const recipes = this.recipes;
     const panelX = (GAME_WIDTH - 760) / 2;
     const panelY = (GAME_HEIGHT - 600) / 2;
-    const pageCount = Math.max(1, Math.ceil(recipes.length / this.rowsPerPage));
-    this.pageText.setText(`${this.sortByCategory ? '種別順' : 'ID順'}　${this.page + 1} / ${pageCount}`);
+    const totalRecipeCount = [...this.itemDefinitions.values()]
+      .filter((definition) => definition.category === 80)
+      .length;
+    this.pageText.setText(`${this.sortByCategory ? '種別順' : 'ID順'}　${recipes.length} / ${totalRecipeCount}`);
     this.rowGraphics.clear();
     this.rowTexts.forEach((text, row) => {
       const index = this.page * this.rowsPerPage + row;
