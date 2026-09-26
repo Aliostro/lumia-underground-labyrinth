@@ -179,7 +179,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('dev-flag-data', `assets/data/dev-flg.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
-    this.load.text('item-data', 'assets/data/item.csv');
+    this.load.text('item-data', `assets/data/item.csv?v=${Date.now()}`);
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
     this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);

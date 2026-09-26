@@ -42,10 +42,10 @@ class DungeonTestScene extends Phaser.Scene {
       this.load.text(this.dungeonDataKey, `assets/data/${this.dungeonDataFile}?v=${Date.now()}`);
     }
     this.load.text('message-data', `assets/data/message.csv?v=${Date.now()}`);
-    this.load.text('item-data', 'assets/data/item.csv');
+    this.load.text('item-data', `assets/data/item.csv?v=${Date.now()}`);
     this.load.text('item-equip-effect-data', `assets/data/item-equip-eff.csv?v=${Date.now()}`);
-    this.load.text('item-effect-data', 'assets/data/item-effect.csv');
-    this.load.text('craft-data', 'assets/data/craft.csv');
+    this.load.text('item-effect-data', `assets/data/item-effect.csv?v=${Date.now()}`);
+    this.load.text('craft-data', `assets/data/craft.csv?v=${Date.now()}`);
     this.load.image('Chara0002.png', 'assets/image/Chara0002.png');
     this.load.image('Chara0003.png', 'assets/image/Chara0003.png');
     this.load.image('Chara0004.png', 'assets/image/Chara0004.png');
