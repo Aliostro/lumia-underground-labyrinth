@@ -1,5 +1,30 @@
 let isZKeyHeld = false;
 const SFX_VOLUME_STORAGE_KEY = 'lumia-underground-labyrinth-sfx-volume';
+const PLAYER_SKIN_STORAGE_KEY = 'lumia-underground-labyrinth-player-skin';
+const RECOVERY_PARALLEL_CODE = '28721A30';
+const RECOVERY_FLOOR = 13;
+const RECOVERY_LEVEL = 17;
+const RECOVERY_EXPERIENCE_PROGRESS = 0.6;
+const RECOVERY_ITEMS = [
+  [18, 1],
+  [2011, 1],
+  [3000, 1],
+  [2015, 1],
+  [3011, 1],
+  [5000, 1],
+  [4004, 2],
+  [7005, 3],
+  [1000, 1],
+  [9005, 1],
+  [5007, 1],
+  [5006, 1],
+  [7000, 1],
+  [7001, 1],
+];
+const PLAYER_SKINS = [
+  { key: 'player-skin-default', file: 'Chara0001.png', label: 'デフォルト' },
+  { key: 'player-skin-alternate', file: 'Chara0001a.png', label: 'ブラサバ' },
+];
 
 function getSfxVolume() {
   try {
@@ -26,6 +51,28 @@ function setSfxVolume(volume) {
 
 function applySfxVolume(soundManager) {
   soundManager.volume = getSfxVolume();
+}
+
+function getPlayerSkinIndex() {
+  try {
+    const savedIndex = Number(window.localStorage.getItem(PLAYER_SKIN_STORAGE_KEY));
+    if (Number.isInteger(savedIndex) && PLAYER_SKINS[savedIndex]) {
+      return savedIndex;
+    }
+  } catch {
+    // Ignore unavailable browser storage and use the default skin.
+  }
+  return 0;
+}
+
+function setPlayerSkinIndex(index) {
+  const normalizedIndex = Phaser.Math.Wrap(index, 0, PLAYER_SKINS.length);
+  try {
+    window.localStorage.setItem(PLAYER_SKIN_STORAGE_KEY, String(normalizedIndex));
+  } catch {
+    // Keep the selected skin for the current session when browser storage is unavailable.
+  }
+  return normalizedIndex;
 }
 
 window.addEventListener('keydown', (event) => {
@@ -102,6 +149,11 @@ class TitleScene extends Phaser.Scene {
     this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
     this.load.text('item-data', 'assets/data/item.csv');
+    this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
+    this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
+    PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
+    EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
+    EnemyBook.SYMBOL_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
     this.load.image('item-icon-sword', 'assets/image/IconSword.png');
     this.load.image('item-icon-bow', 'assets/image/IconBow.png?v=2');
     this.load.image('item-icon-armor', 'assets/image/IconArmor.png');
@@ -133,8 +185,9 @@ class TitleScene extends Phaser.Scene {
       fontSize: '24px',
       color: '#9ab5c7',
     }).setOrigin(0.5);
-    this.titleSelection = 0;
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
+    this.enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'));
+    this.enemySkillDefinitions = GameData.parseEnemySkillData(this.cache.text.get('enemy-skill-data'));
     const dungeonOptions = [
       { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
@@ -149,24 +202,60 @@ class TitleScene extends Phaser.Scene {
         dungeonDataKey: option.key,
         dungeonDataFile: option.file,
         parallelCode,
+        playerSkinIndex: getPlayerSkinIndex(),
       });
     };
     this.startDungeon = startDungeon;
     this.dungeonOptions = dungeonOptions;
+    this.startRecoveryRun = () => {
+      const parallelRun = parseParallelCode(RECOVERY_PARALLEL_CODE);
+      const option = dungeonOptions.find((candidate) => candidate.key === parallelRun?.dungeonDataKey);
+      if (!parallelRun || !option) {
+        return;
+      }
+      const playerStatus = new PlayerStatus();
+      playerStatus.floor = RECOVERY_FLOOR;
+      playerStatus.setLevel(RECOVERY_LEVEL);
+      playerStatus.experience = playerStatus.getLevelStartExperience(RECOVERY_LEVEL)
+        + Math.floor(playerStatus.getExperienceToNextLevel() * RECOVERY_EXPERIENCE_PROGRESS);
+      RECOVERY_ITEMS.forEach(([itemId, quantity]) => {
+        playerStatus.addItem(itemId, quantity, this.itemDefinitions);
+      });
+      this.sound.play('se-cursor-enter');
+      this.scene.start('DungeonTestScene', {
+        dungeonDataKey: option.key,
+        dungeonDataFile: option.file,
+        parallelCode: parallelRun.code,
+        playerSkinIndex: getPlayerSkinIndex(),
+        playerStatus,
+      });
+    };
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
-    this.titleMenuItems = [
-      this.createTitleMenuItem(372, dungeonOptions[0].data.dungeonName, () => {
+    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemySkillDefinitions, 20);
+    const mainMenuItems = [
+      this.createTitleMenuItem(GAME_WIDTH / 2, 372, dungeonOptions[0].data.dungeonName, () => {
         startDungeon(dungeonOptions[0]);
       }, dungeonOptions[0].data.dungeonDescription ?? ''),
-      this.createTitleMenuItem(464, dungeonOptions[1].data.dungeonName, () => {
+      this.createTitleMenuItem(GAME_WIDTH / 2, 464, dungeonOptions[1].data.dungeonName, () => {
         startDungeon(dungeonOptions[1]);
       }, dungeonOptions[1].data.dungeonDescription ?? ''),
-      this.createTitleMenuItem(556, 'レシピ図鑑', () => this.openRecipeBook()),
-      this.createTitleMenuItem(648, 'オプション', () => this.openOptionsMenu()),
+      this.createTitleMenuItem(GAME_WIDTH / 2, 556, 'オプション', () => this.openOptionsMenu()),
     ];
+    const bookMenuItems = [
+      this.createTitleMenuItem(1060, 420, 'レシピ図鑑', () => this.openRecipeBook(), '', { width: 280, height: 64, fontSize: 24 }),
+      this.createTitleMenuItem(1060, 508, '実験体図鑑', () => this.openEnemyBook(), '', { width: 280, height: 64, fontSize: 24 }),
+    ];
+    this.titleMenuColumns = [mainMenuItems, bookMenuItems];
+    this.titleMenuItems = this.titleMenuColumns.flat();
+    this.titleMenuColumns.forEach((items, column) => items.forEach((item, row) => {
+      item.column = column;
+      item.row = row;
+    }));
+    this.titleSelectionColumn = 0;
+    this.titleSelectionRow = 0;
     this.updateTitleMenuSelection();
     this.createParallelControls(startDungeon, dungeonOptions);
-    this.add.text(GAME_WIDTH / 2, 708, '上下キー: 選択    Zキー: 決定', {
+    this.add.text(GAME_WIDTH / 2, 708, '十字キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
       color: '#f3f1e8',
@@ -185,17 +274,25 @@ class TitleScene extends Phaser.Scene {
         }
         return;
       }
+      if (this.enemyBook.container.visible) {
+        if (this.enemyBook.handleInput(event.code)) {
+          this.sound.play(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+        }
+        return;
+      }
       if (this.parallelCodeInputFocused && this.handleParallelCodeInput(event)) {
         return;
       }
-      if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
-        this.titleSelection = (this.titleSelection + (event.code === 'ArrowUp' ? -1 : 1) + this.titleMenuItems.length)
-          % this.titleMenuItems.length;
+      if (event.code === 'KeyP' && event.shiftKey) {
+        event.preventDefault();
+        this.startRecoveryRun();
+      } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
+        this.moveTitleMenuSelection(event.code);
         this.sound.play('se-cursor-move');
         this.updateTitleMenuSelection();
       } else if (event.code === 'KeyZ' || event.code === 'Enter' || event.code === 'Space') {
         event.preventDefault();
-        this.titleMenuItems[this.titleSelection].action();
+        this.getSelectedTitleMenuItem().action();
       }
     };
     this.input.keyboard.on('keydown', this.onTitleKeyDown);
@@ -295,33 +392,35 @@ class TitleScene extends Phaser.Scene {
   }
 
   isTitleWindowOpen() {
-    return this.optionWindowVisible || this.recipeBook?.container.visible;
+    return this.optionWindowVisible || this.recipeBook?.container.visible || this.enemyBook?.container.visible;
   }
 
-  createTitleMenuItem(y, label, action, subtitle = '') {
-    const height = 84;
-    const background = this.add.rectangle(GAME_WIDTH / 2, y, 420, height, 0x384d58)
+  createTitleMenuItem(x, y, label, action, subtitle = '', options = {}) {
+    const { width = 420, height = 84, fontSize = 30 } = options;
+    const background = this.add.rectangle(x, y, width, height, 0x384d58)
       .setStrokeStyle(2, 0x6e8996)
       .setInteractive({ useHandCursor: true });
-    const text = this.add.text(GAME_WIDTH / 2, y + (subtitle ? -12 : 0), label, {
+    const text = this.add.text(x, y + (subtitle ? -12 : 0), label, {
       fontFamily: 'Yusei Magic, sans-serif',
-      fontSize: '30px',
+      fontSize: `${fontSize}px`,
       color: '#f3f1e8',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    const subtitleText = subtitle ? this.add.text(GAME_WIDTH / 2, y + 20, subtitle, {
+    const subtitleText = subtitle ? this.add.text(x, y + 20, subtitle, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
       color: '#b7c6d3',
     }).setOrigin(0.5).setResolution(2).setInteractive({ useHandCursor: true }) : null;
     const selectItem = () => {
-      this.titleSelection = this.titleMenuItems.findIndex((item) => item.background === background);
+      const item = this.titleMenuItems.find((candidate) => candidate.background === background);
+      this.titleSelectionColumn = item.column;
+      this.titleSelectionRow = item.row;
       this.updateTitleMenuSelection();
     };
     background.on('pointerover', selectItem);
     text.on('pointerover', selectItem);
     subtitleText?.on('pointerover', selectItem);
     const handlePointerDown = () => {
-      if (this.optionWindowVisible || this.recipeBook.container.visible) {
+      if (this.isTitleWindowOpen()) {
         return;
       }
       action();
@@ -333,8 +432,8 @@ class TitleScene extends Phaser.Scene {
   }
 
   updateTitleMenuSelection() {
-    this.titleMenuItems.forEach((item, index) => {
-      const selected = index === this.titleSelection;
+    this.titleMenuItems.forEach((item) => {
+      const selected = item.column === this.titleSelectionColumn && item.row === this.titleSelectionRow;
       item.background.setFillStyle(selected ? 0x4d6875 : 0x384d58);
       item.background.setStrokeStyle(2, selected ? 0xffdc4a : 0x6e8996);
       item.text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
@@ -342,12 +441,27 @@ class TitleScene extends Phaser.Scene {
     });
   }
 
+  getSelectedTitleMenuItem() {
+    return this.titleMenuColumns[this.titleSelectionColumn][this.titleSelectionRow];
+  }
+
+  moveTitleMenuSelection(code) {
+    if (code === 'ArrowUp' || code === 'ArrowDown') {
+      const items = this.titleMenuColumns[this.titleSelectionColumn];
+      this.titleSelectionRow = (this.titleSelectionRow + (code === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+      return;
+    }
+    this.titleSelectionColumn = (this.titleSelectionColumn + (code === 'ArrowLeft' ? -1 : 1) + this.titleMenuColumns.length)
+      % this.titleMenuColumns.length;
+    this.titleSelectionRow = Math.min(this.titleSelectionRow, this.titleMenuColumns[this.titleSelectionColumn].length - 1);
+  }
+
   openOptionsMenu() {
     this.sound.play('se-cursor-enter');
     this.optionWindowVisible = true;
     const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.62)
       .setDepth(10);
-    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 600, 350, 0x182831, 0.98)
+    const panel = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, 800, 460, 0x182831, 0.98)
       .setStrokeStyle(2, 0xffdc4a)
       .setDepth(11);
     const title = this.add.text(GAME_WIDTH / 2, 240, 'オプション', {
@@ -369,18 +483,38 @@ class TitleScene extends Phaser.Scene {
       fontSize: '24px',
       color: '#f3f1e8',
     }).setOrigin(0, 0.5).setDepth(12);
-    const hint = this.add.text(GAME_WIDTH / 2, 465, '左右キーで調整    Xキーで戻る', {
+    this.optionSkinLabel = this.add.text(460, 440, 'プレイヤースキン', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '26px',
+      color: '#f3f1e8',
+    }).setOrigin(1, 0.5).setDepth(12);
+    this.optionSkinValue = this.add.text(490, 440, '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '24px',
+      color: '#f3f1e8',
+    }).setOrigin(0, 0.5).setDepth(12);
+    this.optionSkinPreview = this.add.image(780, 476, PLAYER_SKINS[0].key)
+      .setDisplaySize(112, 112).setOrigin(0.5, 1).setDepth(12);
+    const hint = this.add.text(GAME_WIDTH / 2, 555, '上下キー: 項目選択    左右キー: 調整    Xキーで戻る', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
       color: '#9ab5c7',
     }).setOrigin(0.5).setDepth(12);
-    this.optionWindowObjects = [overlay, panel, title, label, this.optionVolumeTrack, this.optionVolumeFill, this.optionVolumeValue, hint];
+    this.optionSelection = 0;
+    this.optionWindowObjects = [overlay, panel, title, label, this.optionVolumeTrack, this.optionVolumeFill, this.optionVolumeValue, this.optionSkinLabel, this.optionSkinValue, this.optionSkinPreview, hint];
     this.updateSfxVolumeDisplay();
+    this.updatePlayerSkinDisplay();
+    this.updateOptionSelection();
   }
 
   openRecipeBook() {
     this.sound.play('se-cursor-enter');
     this.recipeBook.open();
+  }
+
+  openEnemyBook() {
+    this.sound.play('se-cursor-enter');
+    this.enemyBook.open();
   }
 
   closeOptionsMenu() {
@@ -391,10 +525,18 @@ class TitleScene extends Phaser.Scene {
   }
 
   handleOptionsInput(code) {
-    if (code === 'ArrowLeft' || code === 'ArrowRight') {
+    if (code === 'ArrowUp' || code === 'ArrowDown') {
+      this.optionSelection = (this.optionSelection + (code === 'ArrowUp' ? -1 : 1) + 2) % 2;
+      this.updateOptionSelection();
+      this.sound.play('se-cursor-move');
+    } else if ((code === 'ArrowLeft' || code === 'ArrowRight') && this.optionSelection === 0) {
       const volume = setSfxVolume(getSfxVolume() + (code === 'ArrowLeft' ? -0.1 : 0.1));
       this.sound.volume = volume;
       this.updateSfxVolumeDisplay();
+      this.sound.play('se-cursor-move');
+    } else if ((code === 'ArrowLeft' || code === 'ArrowRight') && this.optionSelection === 1) {
+      setPlayerSkinIndex(getPlayerSkinIndex() + (code === 'ArrowLeft' ? -1 : 1));
+      this.updatePlayerSkinDisplay();
       this.sound.play('se-cursor-move');
     } else if (code === 'KeyX' || code === 'Escape' || code === 'KeyZ' || code === 'Enter' || code === 'Space') {
       this.closeOptionsMenu();
@@ -405,6 +547,19 @@ class TitleScene extends Phaser.Scene {
     const volume = getSfxVolume();
     this.optionVolumeFill.setDisplaySize(340 * volume, 16);
     this.optionVolumeValue.setText(`${Math.round(volume * 100)}%`);
+  }
+
+  updatePlayerSkinDisplay() {
+    const skin = PLAYER_SKINS[getPlayerSkinIndex()];
+    this.optionSkinValue.setText(skin.label);
+    this.optionSkinPreview.setTexture(skin.key);
+  }
+
+  updateOptionSelection() {
+    const volumeSelected = this.optionSelection === 0;
+    this.optionVolumeTrack.setStrokeStyle(2, volumeSelected ? 0xffdc4a : 0x6e8996);
+    this.optionSkinLabel.setColor(volumeSelected ? '#f3f1e8' : '#ffdc4a');
+    this.optionSkinValue.setColor(volumeSelected ? '#f3f1e8' : '#ffdc4a');
   }
 }
 
@@ -419,6 +574,7 @@ class ResultScene extends Phaser.Scene {
     const status = result?.status ?? {};
     const equipment = result?.equipment ?? [];
     const dungeonName = result?.dungeonName ?? '';
+    const parallelCode = result?.parallelCode ?? '';
     const gameTime = result?.gameTime ?? '00:00:00';
     this.add.text(GAME_WIDTH / 2, 90, succeeded ? '任務成功' : '任務失敗', {
       fontFamily: 'Yusei Magic, sans-serif',
@@ -430,14 +586,21 @@ class ResultScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#9ab5c7',
     }).setOrigin(0.5);
+    if (parallelCode) {
+      this.add.text(GAME_WIDTH / 2, 175, `(${parallelCode})`, {
+        fontFamily: 'Yusei Magic, sans-serif',
+        fontSize: '20px',
+        color: '#9ab5c7',
+      }).setOrigin(0.5);
+    }
     if (!succeeded) {
-      this.add.text(GAME_WIDTH / 2, 185, `死因: ${result?.cause ?? '力尽きた'}`, {
+      this.add.text(GAME_WIDTH / 2, parallelCode ? 205 : 185, `死因: ${result?.cause ?? '力尽きた'}`, {
         fontFamily: 'Yusei Magic, sans-serif',
         fontSize: '25px',
         color: '#f3f1e8',
       }).setOrigin(0.5);
     }
-    this.add.text(GAME_WIDTH / 2, 215, `ゲーム時間: ${gameTime}`, {
+    this.add.text(GAME_WIDTH / 2, parallelCode ? (succeeded ? 215 : 235) : 215, `ゲーム時間: ${gameTime}`, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
       color: '#9ab5c7',

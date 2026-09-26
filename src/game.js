@@ -7,6 +7,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.dungeonDataKey = data?.dungeonDataKey ?? this.dungeonDataKey ?? 'dungeon-data-0001';
     this.dungeonDataFile = data?.dungeonDataFile ?? this.dungeonDataFile ?? 'dungeon-0001.dat';
     this.parallelCode = data?.parallelCode ?? this.parallelCode ?? null;
+    this.playerSkinIndex = data?.playerSkinIndex ?? this.playerSkinIndex ?? getPlayerSkinIndex();
   }
 
   preload() {
@@ -30,7 +31,7 @@ class DungeonTestScene extends Phaser.Scene {
       frameWidth: TILE_SIZE,
       frameHeight: TILE_SIZE,
     });
-    this.load.image('hero', 'assets/image/Chara0001.png');
+    PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     this.load.image('stairs', 'assets/image/Steps.png');
     this.load.image('WanaSpring', 'assets/image/WanaSpring.png');
     this.load.image('WanaMine', 'assets/image/WanaMine.png');
@@ -170,7 +171,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.hero = this.add.image(
       (spawnRoom.centerX + 0.5) * TILE_SIZE,
       (spawnRoom.centerY + 1) * TILE_SIZE,
-      'hero',
+      PLAYER_SKINS[this.playerSkinIndex]?.key ?? PLAYER_SKINS[0].key,
     );
     this.hero.setOrigin(0.5, 1);
     this.hero.setDisplaySize(HERO_DISPLAY_SIZE, HERO_DISPLAY_SIZE);
@@ -267,6 +268,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.createInventoryUi();
     this.createStairMenuUi();
     this.recipeBook = new RecipeBook(this, this.itemDefinitions);
+    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemySkillDefinitions);
     this.actionLog = new ActionLog(this, this.messageData, () => this.floorTurn);
     this.messageLogScrollDirection = 0;
     this.messageLogScrollNextAt = 0;
@@ -313,6 +315,12 @@ class DungeonTestScene extends Phaser.Scene {
         }
         return;
       }
+      if (this.enemyBook.container.visible) {
+        if (this.enemyBook.handleInput(event.code)) {
+          this.playSfx(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+        }
+        return;
+      }
       if (this.playerStatus.brainwashed && !this.isHeroMoving && !this.queuedMove && !this.pendingThrow) {
         this.forceBrainwashedAction();
         return;
@@ -344,9 +352,22 @@ class DungeonTestScene extends Phaser.Scene {
         return;
       }
       if (
-        !this.inventoryUi.visible
-        && (this.playerStatus.sleepTurns > 0 || this.playerStatus.paralysisTurns > 0)
+        event.code === 'KeyF'
+        && !this.inventoryUi.visible
+        && !this.pendingThrow
+        && !this.mapOverlay.visible
       ) {
+        this.playSfx('se-cursor-enter');
+        this.enemyBook.open();
+        this.cancelQueuedMove();
+        return;
+      }
+      if (!this.inventoryUi.visible && this.playerStatus.sleepTurns > 0) {
+        this.queueSleepTurn();
+        return;
+      }
+      if (!this.inventoryUi.visible && this.playerStatus.paralysisTurns > 0) {
+        this.queueParalysisTurn();
         return;
       }
       if (this.pendingThrow && event.code === 'KeyX') {
@@ -1108,6 +1129,7 @@ class DungeonTestScene extends Phaser.Scene {
         playerStatus: this.playerStatus,
         fadeIn: true,
         parallelCode: this.parallelCode,
+        playerSkinIndex: this.playerSkinIndex,
       });
     });
   }
@@ -1216,6 +1238,9 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('ITEM_HUNGER_RECOVERY', { amount: recoveredHunger });
       }
     } else {
+      if (item.equipped != null) {
+        this.playerStatus.unequipItem(item);
+      }
       this.removeInventoryOrFloorItem(item);
       const dropTile = {
         x: this.heroTileX,
@@ -1985,6 +2010,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   applyEnemyDefeatDrop(enemy) {
+    EnemyBook.register(enemy.id);
     if (
       [
         ENEMY_SKILL_ADRIANA_FIRE_PILLAR,
@@ -2406,6 +2432,7 @@ class DungeonTestScene extends Phaser.Scene {
       cause,
       succeeded,
       dungeonName: this.dungeonData.dungeonName,
+      parallelCode: this.parallelCode,
       gameTime: this.getFormattedGameTime(),
       status: {
         floor: this.playerStatus.floor,
