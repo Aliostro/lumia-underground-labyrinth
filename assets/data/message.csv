@@ -17,6 +17,7 @@
 "ENEMY_RANGED_MISS_ENEMY","{enemy}の遠距離攻撃は{target}に回避された。"
 "ENEMY_ADINA_MAGIC_BOLT","{enemy}の天体が{target}に当たった！"
 "ENEMY_EVOLVED","{enemy}は{evolution}に昇格した！"
+"ENEMY_DEMOTED","{enemy}は{demotion}に降格した！"
 "ENEMY_SURVIVED","{enemy}はニナとの生命共有で耐えた！"
 "ENEMY_DEFEATED","{enemy}を倒した！{experience}の経験値を得た。"
 "ENEMY_DROP_ITEM","{enemy}は{item}を落とした。"

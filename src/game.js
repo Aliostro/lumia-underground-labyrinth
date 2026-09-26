@@ -1187,6 +1187,8 @@ class DungeonTestScene extends Phaser.Scene {
         || definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP
         || definition.useEffectId === ITEM_EFFECT_SLOW_POWDER
         || definition.useEffectId === ITEM_EFFECT_THE_MOON
+        || definition.useEffectId === ITEM_EFFECT_THE_DEATH
+        || definition.useEffectId === ITEM_EFFECT_THE_HERMIT
       )
     ) {
       this.pendingThrow = {
@@ -1198,6 +1200,8 @@ class DungeonTestScene extends Phaser.Scene {
         directionalWarp: definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP,
         slowPowder: definition.useEffectId === ITEM_EFFECT_SLOW_POWDER,
         theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
+        theDeath: definition.useEffectId === ITEM_EFFECT_THE_DEATH,
+        theHermit: definition.useEffectId === ITEM_EFFECT_THE_HERMIT,
       };
       this.inventoryUi.setVisible(false);
       this.closeInventoryMenu();
@@ -1488,6 +1492,8 @@ class DungeonTestScene extends Phaser.Scene {
       directionalWarp,
       slowPowder,
       theMoon,
+      theDeath,
+      theHermit,
     } = this.pendingThrow;
     this.pendingThrow = null;
     if (fromFloor ? this.getFloorItemAt(this.heroTileX, this.heroTileY) !== item : !this.playerStatus.inventory.includes(item)) {
@@ -1503,11 +1509,11 @@ class DungeonTestScene extends Phaser.Scene {
       this.useTheMoon(item, definition, direction);
       return;
     }
-    if (sleepGas || volticlet || slowPowder) {
+    if (sleepGas || volticlet || slowPowder || theDeath || theHermit) {
       this.playSfx('se-use');
     }
     this.playSfx('se-throw');
-    if (!sleepGas && !volticlet && !slowPowder) {
+    if (!sleepGas && !volticlet && !slowPowder && !theDeath && !theHermit) {
       this.removeInventoryOrFloorItem(item);
     }
     const throwResult = volticlet
@@ -1516,7 +1522,7 @@ class DungeonTestScene extends Phaser.Scene {
     const { destination } = throwResult;
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
     this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
-    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder ? '撃った' : '投げた' });
+    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder || theDeath || theHermit ? '撃った' : '投げた' });
     this.isHeroMoving = true;
     this.idleTween.stop();
     this.hero.setScale(HERO_SCALE);
@@ -1533,7 +1539,21 @@ class DungeonTestScene extends Phaser.Scene {
       ease: 'Quad.easeOut',
       onComplete: () => {
         thrownIcon.destroy();
-        if (sleepGas) {
+        if (theHermit) {
+          if (throwResult.enemy) {
+            this.applyTheHermit(throwResult.enemy);
+          }
+          if (this.consumeDeviceUse(item)) {
+            this.removeInventoryOrFloorItem(item);
+          }
+        } else if (theDeath) {
+          if (throwResult.enemy) {
+            this.applyTheDeath(throwResult.enemy);
+          }
+          if (this.consumeDeviceUse(item)) {
+            this.removeInventoryOrFloorItem(item);
+          }
+        } else if (sleepGas) {
           if (throwResult.enemy) {
             this.applySleepGas(throwResult.enemy);
           }
@@ -1877,6 +1897,8 @@ class DungeonTestScene extends Phaser.Scene {
           || definition.useEffectId === ITEM_EFFECT_VOLTICLET
           || definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP
           || definition.useEffectId === ITEM_EFFECT_THE_MOON
+          || definition.useEffectId === ITEM_EFFECT_THE_DEATH
+          || definition.useEffectId === ITEM_EFFECT_THE_HERMIT
         )
       )
     ) {
@@ -1888,6 +1910,8 @@ class DungeonTestScene extends Phaser.Scene {
         volticlet: definition.useEffectId === ITEM_EFFECT_VOLTICLET,
         directionalWarp: definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP,
         theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
+        theDeath: definition.useEffectId === ITEM_EFFECT_THE_DEATH,
+        theHermit: definition.useEffectId === ITEM_EFFECT_THE_HERMIT,
       };
       this.throwPendingItem(Phaser.Utils.Array.GetRandom(MOVE_DIRECTIONS));
       return;
@@ -1968,6 +1992,137 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
+  }
+
+  applyTheDeath(enemy) {
+    this.playTheDeathEffect(enemy);
+    this.applyEnemyDefeatDrop(enemy);
+    this.dropEnemyHeldItem(enemy);
+    const levelsGained = this.playerStatus.gainExperience(enemy.experience);
+    this.updateStatusUi();
+    this.actionLog.add('ENEMY_DEFEATED', {
+      enemy: this.getEnemyLogName(enemy),
+      experience: enemy.experience,
+    });
+    levelsGained.forEach((level) => {
+      this.playSfx('se-level-up');
+      this.actionLog.add('LEVEL_UP', { level });
+    });
+    enemy.sprite.destroy();
+    enemy.symbolOutline?.destroy();
+    enemy.symbol?.destroy();
+    enemy.jackieLevelText?.destroy();
+    enemy.sleepText.destroy();
+    enemy.confusionText.destroy();
+    enemy.peaceText?.destroy();
+    enemy.hasteText.destroy();
+    enemy.slowText.destroy();
+    enemy.paralysisText.destroy();
+    this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
+  }
+
+  applyTheHermit(enemy) {
+    if (this.isJackie(enemy)) {
+      if (enemy.jackieLevel <= 1) {
+        return;
+      }
+      enemy.jackieLevel -= 1;
+      enemy.attack -= 5;
+      enemy.jackieLevelText.setText(`Lv${enemy.jackieLevel}`);
+      this.actionLog.add('ENEMY_DEMOTED', {
+        enemy: this.getEnemyLogName(enemy),
+        demotion: `Lv${enemy.jackieLevel}`,
+      });
+      return;
+    }
+    const demotion = this.enemyDefinitions.find((definition) => definition.evolutionId === enemy.id);
+    if (!demotion) {
+      return;
+    }
+    const previousName = this.getEnemyLogName(enemy);
+    const copiedSpecialAbilityId = enemy.copiedSpecialAbilityId;
+    enemy.symbolOutline?.destroy();
+    enemy.symbol?.destroy();
+    Object.assign(enemy, demotion, {
+      tileX: enemy.tileX,
+      tileY: enemy.tileY,
+      sprite: enemy.sprite,
+      sleepText: enemy.sleepText,
+      confusionText: enemy.confusionText,
+      hasteText: enemy.hasteText,
+      slowText: enemy.slowText,
+      paralysisText: enemy.paralysisText,
+      status: null,
+      sleepTurns: 0,
+      confusionTurns: 0,
+      slowTurns: 0,
+      paralysisTurns: 0,
+      slowSkipNextTurn: false,
+      speedTurns: 0,
+      maxHitPoints: demotion.hitPoints,
+      hitPoints: demotion.hitPoints,
+      hasUsedSurvivalAbility: false,
+    });
+    if (copiedSpecialAbilityId != null) {
+      enemy.copiedSpecialAbilityId = copiedSpecialAbilityId;
+      enemy.specialAbilityId = copiedSpecialAbilityId;
+    }
+    if (enemy.symbolFile) {
+      const symbolKey = this.getSymbolTextureKey(enemy.symbolFile);
+      enemy.symbolOutline = this.add.image(enemy.sprite.x + 28, enemy.sprite.y - 20, symbolKey)
+        .setOrigin(0.5)
+        .setDisplaySize(26, 26)
+        .setTintFill(0x000000);
+      enemy.symbol = this.add.image(enemy.sprite.x + 28, enemy.sprite.y - 20, symbolKey)
+        .setOrigin(0.5)
+        .setDisplaySize(24, 24);
+      this.updateEnemySymbolDepth(enemy);
+    }
+    enemy.sleepText.setVisible(false);
+    enemy.confusionText.setVisible(false);
+    enemy.hasteText.setVisible(false);
+    enemy.slowText.setVisible(false);
+    enemy.paralysisText.setVisible(false);
+    this.playSfx('se-level-up');
+    this.actionLog.add('ENEMY_DEMOTED', {
+      enemy: previousName,
+      demotion: this.getEnemyLogName(enemy),
+    });
+  }
+
+  playTheDeathEffect(enemy) {
+    const effect = this.add.graphics().setDepth(FOG_DEPTH - 1);
+    effect.fillStyle(0x6e154f, 0.2);
+    effect.fillCircle(0, 0, TILE_SIZE * 0.48);
+    effect.fillStyle(0xa51f63, 0.34);
+    effect.fillCircle(0, 0, TILE_SIZE * 0.32);
+    effect.lineStyle(5, 0xf0449a, 0.8);
+    effect.strokeCircle(0, 0, TILE_SIZE * 0.27);
+    effect.lineStyle(2, 0xd49aff, 0.9);
+    effect.strokeCircle(0, 0, TILE_SIZE * 0.38);
+    effect.fillStyle(0xe14b9b, 0.98);
+    effect.fillCircle(0, -6, 18);
+    effect.fillRect(-11, 6, 22, 13);
+    effect.fillStyle(0x35102f, 1);
+    effect.fillCircle(-6, -7, 4);
+    effect.fillCircle(6, -7, 4);
+    effect.fillTriangle(0, 0, -3, 6, 3, 6);
+    effect.fillRect(-5, 11, 3, 7);
+    effect.fillRect(2, 11, 3, 7);
+    effect.setPosition(
+      (enemy.tileX + 0.5) * TILE_SIZE,
+      (enemy.tileY + 0.5) * TILE_SIZE,
+    ).setScale(0.55, 0.55);
+    this.tweens.add({
+      targets: effect,
+      y: `-=${TILE_SIZE * 1.3}`,
+      scaleX: 0.7,
+      scaleY: 1.7,
+      alpha: 0,
+      duration: 700,
+      ease: 'Quad.easeOut',
+      onComplete: () => effect.destroy(),
+    });
   }
 
   applyEnemySurvivalAbility(enemy) {
@@ -2449,6 +2604,7 @@ class DungeonTestScene extends Phaser.Scene {
       equipment,
     };
     if (succeeded) {
+      markDungeonCleared(this.dungeonDataFile);
       this.scene.start('ResultScene', result);
     } else {
       this.time.delayedCall(1000, () => this.scene.start('ResultScene', result));
@@ -3170,7 +3326,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.wakeSpawnSleepingEnemy(enemy);
     const rangedAttackBonus = !ranged
       ? 0
-      : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATER_RANGED_ATTACK_INCREASE)
+      : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATEST_RANGED_ATTACK_INCREASE)
+        ? 20
+        : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATER_RANGED_ATTACK_INCREASE)
         ? 10
         : this.hasEquipEffect(ITEM_EQUIP_EFFECT_RANGED_ATTACK_INCREASE) ? 5 : 0;
     const damage = Math.max(1, this.playerStatus.attack + rangedAttackBonus - enemy.defense);
@@ -3190,7 +3348,7 @@ class DungeonTestScene extends Phaser.Scene {
         !ranged
         && enemy.hitPoints > 0
         && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK)
-        && Math.random() < ALMAS_SLOW_CHANCE
+        && Math.random() < EQUIPMENT_STATUS_ATTACK_CHANCE
       ) {
         if (enemy.speedTurns > 0) {
           enemy.speedTurns = 0;
@@ -3199,6 +3357,16 @@ class DungeonTestScene extends Phaser.Scene {
           enemy.slowSkipNextTurn = true;
           this.actionLog.add('ENEMY_SLOWED', { enemy: this.getEnemyLogName(enemy) });
         }
+      }
+      if (
+        !ranged
+        && enemy.hitPoints > 0
+        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK)
+        && enemy.paralysisTurns === 0
+        && Math.random() < EQUIPMENT_STATUS_ATTACK_CHANCE
+      ) {
+        enemy.paralysisTurns = PARALYSIS_TURN_COUNT;
+        this.actionLog.add('ENEMY_PARALYZED', { enemy: this.getEnemyLogName(enemy) });
       }
       if (!ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_LIFE_STEAL)) {
         const recoveredHitPoints = Math.floor(damage * 0.3);
@@ -6096,7 +6264,10 @@ const startGame = () => {
 if (document.fonts?.load && document.fonts.ready) {
   Promise.all([
     document.fonts.ready,
-    document.fonts.load('16px "Yusei Magic"'),
+    document.fonts.load(
+      '56px "Yusei Magic"',
+      'ルミア島の地下迷宮踏破ホテル裏の下り階段レシピ図鑑完成実験体',
+    ),
   ]).then(() => requestAnimationFrame(startGame), startGame);
 } else {
   startGame();

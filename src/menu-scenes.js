@@ -1,29 +1,15 @@
 let isZKeyHeld = false;
 const SFX_VOLUME_STORAGE_KEY = 'lumia-underground-labyrinth-sfx-volume';
 const PLAYER_SKIN_STORAGE_KEY = 'lumia-underground-labyrinth-player-skin';
-const RECOVERY_PARALLEL_CODE = '28721A30';
-const RECOVERY_FLOOR = 13;
-const RECOVERY_LEVEL = 17;
-const RECOVERY_EXPERIENCE_PROGRESS = 0.6;
-const RECOVERY_ITEMS = [
-  [18, 1],
-  [2011, 1],
-  [3000, 1],
-  [2015, 1],
-  [3011, 1],
-  [5000, 1],
-  [4004, 2],
-  [7005, 3],
-  [1000, 1],
-  [9005, 1],
-  [5007, 1],
-  [5006, 1],
-  [7000, 1],
-  [7001, 1],
+const DUNGEON_CLEAR_STORAGE_KEY = 'lumia-underground-labyrinth-cleared-dungeons';
+const DUNGEON_CLEAR_DISPLAYS = [
+  { file: 'dungeon-0001.dat', label: 'ルミア島の地下迷宮 踏破', imageKey: 'dungeon-clear-rul', imageFile: 'IconClearRUL.png' },
+  { file: 'dungeon-0002.dat', label: 'ホテル裏の下り階段 踏破', imageKey: 'dungeon-clear-hd', imageFile: 'IconClearHD.png' },
 ];
 const PLAYER_SKINS = [
   { key: 'player-skin-default', file: 'Chara0001.png', label: 'デフォルト' },
   { key: 'player-skin-alternate', file: 'Chara0001a.png', label: 'ブラサバ' },
+  { key: 'player-skin-detective', file: 'Chara0001b.png', label: '探偵' },
 ];
 
 function getSfxVolume() {
@@ -51,6 +37,50 @@ function setSfxVolume(volume) {
 
 function applySfxVolume(soundManager) {
   soundManager.volume = getSfxVolume();
+}
+
+function getClearedDungeonFiles() {
+  try {
+    const savedValue = window.localStorage.getItem(DUNGEON_CLEAR_STORAGE_KEY);
+    const files = JSON.parse(savedValue ?? '[]');
+    return new Set(Array.isArray(files) ? files.filter((file) => typeof file === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markDungeonCleared(dungeonFile) {
+  const clearedFiles = getClearedDungeonFiles();
+  clearedFiles.add(dungeonFile);
+  try {
+    window.localStorage.setItem(DUNGEON_CLEAR_STORAGE_KEY, JSON.stringify([...clearedFiles]));
+  } catch {
+    // Keep gameplay functional when browser storage is unavailable.
+  }
+}
+
+function markAllDungeonsCleared() {
+  DUNGEON_CLEAR_DISPLAYS.forEach(({ file }) => markDungeonCleared(file));
+}
+
+function clearAllDungeonClears() {
+  try {
+    window.localStorage.removeItem(DUNGEON_CLEAR_STORAGE_KEY);
+  } catch {
+    // Keep gameplay functional when browser storage is unavailable.
+  }
+}
+
+function isDungeonClearDebugInput(event) {
+  return event.shiftKey && !event.altKey && (event.code === 'Backquote' || event.key === '`' || event.key === '~');
+}
+
+function isDungeonClearResetDebugInput(event) {
+  return event.shiftKey && event.altKey && (event.code === 'Backquote' || event.key === '`' || event.key === '~');
+}
+
+function areDebugKeysEnabled(value) {
+  return value?.trim().toLowerCase() === 'o';
 }
 
 function getPlayerSkinIndex() {
@@ -146,12 +176,14 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
     this.load.text('version-data', `assets/data/version.txt?v=${Date.now()}`);
+    this.load.text('dev-flag-data', `assets/data/dev-flg.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
     this.load.text('item-data', 'assets/data/item.csv');
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
     this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
+    DUNGEON_CLEAR_DISPLAYS.forEach(({ imageKey, imageFile }) => this.load.image(imageKey, `assets/image/${imageFile}`));
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
     EnemyBook.SYMBOL_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
@@ -164,23 +196,31 @@ class TitleScene extends Phaser.Scene {
     this.load.image('item-icon-herb', 'assets/image/IconHerb.png');
     this.load.image('item-icon-recipe', 'assets/image/IconRecipe.png');
     this.load.image('item-icon-junk', 'assets/image/IconJunk.png');
+    this.load.image('icon-complete-enemy-book', 'assets/image/IconCompEnemyBook.png');
   }
 
   create() {
     applySfxVolume(this.sound);
+    this.debugKeysEnabled = areDebugKeysEnabled(this.cache.text.get('dev-flag-data'));
     this.cameras.main.setBackgroundColor('#101820');
-    this.add.text(GAME_WIDTH / 2, 190, 'ルミア島の地下迷宮', {
+    this.titleText = this.add.text(GAME_WIDTH / 2, 190, 'ルミア島の地下迷宮', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '56px',
       color: '#f3f1e8',
       stroke: '#05080c',
       strokeThickness: 8,
     }).setOrigin(0.5);
+    const titleFontLoad = document.fonts?.load(
+      '56px "Yusei Magic"',
+      'ルミア島の地下迷宮踏破ホテル裏の下り階段レシピ図鑑完成実験体',
+    );
+    titleFontLoad?.then(() => this.refreshTitleFonts());
     this.add.text(GAME_WIDTH - 24, GAME_HEIGHT - 22, `ver. ${this.cache.text.get('version-data')?.trim() || '0.0.0'}`, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#9ab5c7',
     }).setOrigin(1, 1);
+    this.createDungeonClearDisplays();
     this.add.text(GAME_WIDTH / 2, 315, 'メニュー', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '24px',
@@ -189,6 +229,7 @@ class TitleScene extends Phaser.Scene {
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
     this.enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'));
     this.enemyBookDescriptions = GameData.parseEnemyBookDescriptionData(this.cache.text.get('enemy-book-description-data'));
+    this.createCompletionTitleDisplays();
     const dungeonOptions = [
       { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
@@ -208,29 +249,6 @@ class TitleScene extends Phaser.Scene {
     };
     this.startDungeon = startDungeon;
     this.dungeonOptions = dungeonOptions;
-    this.startRecoveryRun = () => {
-      const parallelRun = parseParallelCode(RECOVERY_PARALLEL_CODE);
-      const option = dungeonOptions.find((candidate) => candidate.key === parallelRun?.dungeonDataKey);
-      if (!parallelRun || !option) {
-        return;
-      }
-      const playerStatus = new PlayerStatus();
-      playerStatus.floor = RECOVERY_FLOOR;
-      playerStatus.setLevel(RECOVERY_LEVEL);
-      playerStatus.experience = playerStatus.getLevelStartExperience(RECOVERY_LEVEL)
-        + Math.floor(playerStatus.getExperienceToNextLevel() * RECOVERY_EXPERIENCE_PROGRESS);
-      RECOVERY_ITEMS.forEach(([itemId, quantity]) => {
-        playerStatus.addItem(itemId, quantity, this.itemDefinitions);
-      });
-      this.sound.play('se-cursor-enter');
-      this.scene.start('DungeonTestScene', {
-        dungeonDataKey: option.key,
-        dungeonDataFile: option.file,
-        parallelCode: parallelRun.code,
-        playerSkinIndex: getPlayerSkinIndex(),
-        playerStatus,
-      });
-    };
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions, 20);
     const mainMenuItems = [
@@ -284,9 +302,34 @@ class TitleScene extends Phaser.Scene {
       if (this.parallelCodeInputFocused && this.handleParallelCodeInput(event)) {
         return;
       }
-      if (event.code === 'KeyP' && event.shiftKey) {
-        event.preventDefault();
-        this.startRecoveryRun();
+      if (this.debugKeysEnabled && event.shiftKey && event.altKey && event.code === 'Semicolon') {
+        RecipeBook.clearRegisteredIds();
+        this.createCompletionTitleDisplays();
+        this.sound.play('se-cursor-cancel');
+      } else if (this.debugKeysEnabled && event.shiftKey && event.altKey && event.code === 'Quote') {
+        EnemyBook.clearRegisteredIds();
+        this.createCompletionTitleDisplays();
+        this.sound.play('se-cursor-cancel');
+      } else if (this.debugKeysEnabled && event.shiftKey && event.code === 'Semicolon') {
+        this.itemDefinitions.forEach((definition) => {
+          if (definition.category === 80) {
+            RecipeBook.register(definition.id);
+          }
+        });
+        this.createCompletionTitleDisplays();
+        this.sound.play('se-cursor-enter');
+      } else if (this.debugKeysEnabled && event.shiftKey && event.code === 'Quote') {
+        this.enemyDefinitions.forEach((definition) => EnemyBook.register(definition.id));
+        this.createCompletionTitleDisplays();
+        this.sound.play('se-cursor-enter');
+      } else if (this.debugKeysEnabled && isDungeonClearResetDebugInput(event)) {
+        clearAllDungeonClears();
+        this.createDungeonClearDisplays();
+        this.sound.play('se-cursor-cancel');
+      } else if (this.debugKeysEnabled && isDungeonClearDebugInput(event)) {
+        markAllDungeonsCleared();
+        this.createDungeonClearDisplays();
+        this.sound.play('se-cursor-enter');
       } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code)) {
         this.moveTitleMenuSelection(event.code);
         this.sound.play('se-cursor-move');
@@ -300,6 +343,96 @@ class TitleScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown', this.onTitleKeyDown);
     });
+  }
+
+  createDungeonClearDisplays() {
+    this.dungeonClearDisplayObjects?.forEach((object) => object.destroy());
+    const clearedFiles = getClearedDungeonFiles();
+    this.dungeonClearDisplayObjects = DUNGEON_CLEAR_DISPLAYS
+      .flatMap(({ file, label: clearLabel, imageKey }, index) => {
+        const y = 28 + index * 42;
+        const cleared = clearedFiles.has(file);
+        const crown = this.createTitleCrown(y, cleared ? 0x3f3108 : 0x000000);
+        if (!cleared) {
+          return [crown];
+        }
+        const icon = this.add.image(GAME_WIDTH - 24, y, imageKey)
+          .setDisplaySize(32, 32).setOrigin(1, 0.5);
+        const label = this.add.text(GAME_WIDTH - 80, y, clearLabel, {
+          fontFamily: 'Yusei Magic, sans-serif',
+          fontSize: '18px',
+          color: '#f3f1e8',
+          stroke: '#05080c',
+          strokeThickness: 3,
+        }).setOrigin(1, 0.5);
+        return [crown, label, icon];
+      });
+  }
+
+  refreshTitleFonts() {
+    this.children.list.forEach((child) => {
+      if (child.type === 'Text' && child.style.fontFamily.includes('Yusei Magic')) {
+        child.setFontFamily('Yusei Magic, sans-serif');
+        child.setText(child.text);
+      }
+    });
+  }
+
+  createTitleCrown(y, color) {
+    const crown = this.add.graphics();
+    crown.fillStyle(color, 0.9);
+    crown.beginPath();
+    crown.moveTo(GAME_WIDTH - 64, y + 11);
+    crown.lineTo(GAME_WIDTH - 62, y - 16);
+    crown.lineTo(GAME_WIDTH - 53, y - 4);
+    crown.lineTo(GAME_WIDTH - 40, y - 20);
+    crown.lineTo(GAME_WIDTH - 27, y - 4);
+    crown.lineTo(GAME_WIDTH - 18, y - 16);
+    crown.lineTo(GAME_WIDTH - 16, y + 11);
+    crown.closePath();
+    crown.fillPath();
+    crown.fillRect(GAME_WIDTH - 64, y + 8, 48, 7);
+    return crown;
+  }
+
+  createCompletionTitleDisplays() {
+    this.completionTitleDisplayObjects?.forEach((object) => object.destroy());
+    const recipeIds = [...this.itemDefinitions.values()]
+      .filter((definition) => definition.category === 80)
+      .map((definition) => definition.id);
+    const registeredRecipeIds = RecipeBook.getRegisteredIds();
+    const registeredEnemyIds = EnemyBook.getRegisteredIds();
+    const titles = [
+      {
+        label: 'レシピ図鑑 完成',
+        imageKey: 'item-icon-recipe',
+        complete: recipeIds.length > 0 && recipeIds.every((id) => registeredRecipeIds.has(id)),
+      },
+      {
+        label: '実験体図鑑 完成',
+        imageKey: 'icon-complete-enemy-book',
+        complete: this.enemyDefinitions.length > 0
+          && this.enemyDefinitions.every((definition) => registeredEnemyIds.has(definition.id)),
+      },
+    ];
+    this.completionTitleDisplayObjects = titles
+      .flatMap(({ label, imageKey, complete }, index) => {
+        const y = 112 + index * 42;
+        const crown = this.createTitleCrown(y, complete ? 0x3f3108 : 0x000000);
+        if (!complete) {
+          return [crown];
+        }
+        const icon = this.add.image(GAME_WIDTH - 24, y, imageKey)
+          .setDisplaySize(32, 32).setOrigin(1, 0.5);
+        const text = this.add.text(GAME_WIDTH - 80, y, label, {
+          fontFamily: 'Yusei Magic, sans-serif',
+          fontSize: '18px',
+          color: '#f3f1e8',
+          stroke: '#05080c',
+          strokeThickness: 3,
+        }).setOrigin(1, 0.5);
+        return [crown, text, icon];
+      });
   }
 
   createParallelControls(startDungeon, dungeonOptions) {

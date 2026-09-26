@@ -33,6 +33,14 @@ class EnemyBook {
     return true;
   }
 
+  static clearRegisteredIds() {
+    try {
+      window.localStorage.removeItem(ENEMY_BOOK_STORAGE_KEY);
+    } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
+  }
+
   constructor(scene, enemyDefinitions, enemyBookDescriptions, depth = STAIR_MENU_DEPTH + 10) {
     this.scene = scene;
     this.enemyDefinitions = enemyDefinitions;

@@ -25,6 +25,14 @@ class RecipeBook {
     return true;
   }
 
+  static clearRegisteredIds() {
+    try {
+      window.localStorage.removeItem(RECIPE_BOOK_STORAGE_KEY);
+    } catch {
+      // Keep the current session usable when browser storage is unavailable.
+    }
+  }
+
   constructor(scene, itemDefinitions, depth = STAIR_MENU_DEPTH + 10) {
     this.scene = scene;
     this.itemDefinitions = itemDefinitions;
