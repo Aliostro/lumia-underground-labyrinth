@@ -1,4 +1,5 @@
 dungeon-name  = "ルミア島の地下迷宮"
+dungeon-desc  = "地下 30 階"
 max-floor     = 30
 max-enemies   = 60
 

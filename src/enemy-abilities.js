@@ -1,4 +1,21 @@
 const EnemyAbilities = {
+  useYuminWakeAll(enemy) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_YUMIN_WAKE_ALL) {
+      return false;
+    }
+    const hasSleepingTarget = this.playerStatus.sleepTurns > 0 || this.enemies.some((target) => (
+      target.status === 'sleep' || target.status === 'spawn-sleep'
+    ));
+    if (!hasSleepingTarget) {
+      return false;
+    }
+    this.playerStatus.sleepTurns = 0;
+    this.heroSleepText.setVisible(false);
+    this.enemies.forEach((target) => this.wakeEnemy(target));
+    this.actionLog.add('ENEMY_YUMIN_WAKES_ALL');
+    return true;
+  },
+
   useLenoreConfusion(enemy, attacks) {
     const enemyRoom = this.getRoomAt(enemy.tileX, enemy.tileY);
     const isHeroTarget = enemyRoom

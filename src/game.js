@@ -3,6 +3,11 @@ class DungeonTestScene extends Phaser.Scene {
     super('DungeonTestScene');
   }
 
+  init(data) {
+    this.dungeonDataKey = data?.dungeonDataKey ?? this.dungeonDataKey ?? 'dungeon-data-0001';
+    this.dungeonDataFile = data?.dungeonDataFile ?? this.dungeonDataFile ?? 'dungeon-0001.dat';
+  }
+
   preload() {
     this.load.spritesheet('map-chips-0001', 'assets/image/MapChip0001.png', {
       frameWidth: TILE_SIZE,
@@ -28,9 +33,11 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('stairs', 'assets/image/Steps.png');
     this.load.image('WanaSpring', 'assets/image/WanaSpring.png');
     this.load.image('WanaMine', 'assets/image/WanaMine.png');
-    this.load.text('enemy-data', 'assets/data/enemy.csv');
-    this.load.text('enemy-skill-data', 'assets/data/enemy-skill.csv');
-    this.load.text('dungeon-data', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
+    this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
+    this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
+    if (!this.cache.text.has(this.dungeonDataKey)) {
+      this.load.text(this.dungeonDataKey, `assets/data/${this.dungeonDataFile}?v=${Date.now()}`);
+    }
     this.load.text('message-data', `assets/data/message.csv?v=${Date.now()}`);
     this.load.text('item-data', 'assets/data/item.csv');
     this.load.text('item-equip-effect-data', 'assets/data/item-equip-eff.csv');
@@ -79,6 +86,8 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('Chara0042.png', 'assets/image/Chara0042.png');
     this.load.image('Chara0043.png', 'assets/image/Chara0043.png');
     this.load.image('Chara0044.png', 'assets/image/Chara0044.png');
+    this.load.image('Chara0045.png', 'assets/image/Chara0045.png');
+    this.load.image('Chara0046.png', 'assets/image/Chara0046.png');
     this.load.image('Chara9000.png', 'assets/image/Chara9000.png');
     this.load.image('Chara9001.png', 'assets/image/Chara9001.png');
     this.load.image('symbol-gold', 'assets/image/SymbolGold.png');
@@ -115,7 +124,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.itemEquipEffectDefinitions = GameData.parseItemEquipEffectData(this.cache.text.get('item-equip-effect-data'));
     this.itemEffectDefinitions = GameData.parseItemEffectData(this.cache.text.get('item-effect-data'));
     this.craftDefinitions = GameData.parseCraftData(this.cache.text.get('craft-data'));
-    this.dungeonData = GameData.parseDungeonData(this.cache.text.get('dungeon-data'));
+    this.dungeonData = GameData.parseDungeonData(this.cache.text.get(this.dungeonDataKey));
     this.messageData = GameData.parseMessageData(this.cache.text.get('message-data'));
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
     const dungeon = new DungeonGenerator().generate();
@@ -129,9 +138,11 @@ class DungeonTestScene extends Phaser.Scene {
       this.playerStatus.setLevel(this.dungeonData.startLevel);
       this.dungeonData.startItems.forEach((itemId) => this.playerStatus.addItem(itemId, 1, this.itemDefinitions));
     }
+    this.playerStatus.runStartedAt ??= Date.now();
     this.floorItems = [];
     this.floorTurn = 0;
     this.isaacHayesInvasion = false;
+    this.isaacHayesWarningAnnounced = false;
     this.firePillars = [];
     this.traps = [];
     this.monsterHouseRoom = null;
@@ -223,6 +234,20 @@ class DungeonTestScene extends Phaser.Scene {
     this.game.canvas.focus();
     this.game.canvas.addEventListener('pointerdown', () => this.game.canvas.focus());
     this.createStatusUi();
+    this.add.text(STATUS_X, 2, this.dungeonData.dungeonName ?? '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '16px',
+      color: '#f3f1e8',
+      stroke: '#05080c',
+      strokeThickness: 3,
+    }).setScrollFactor(0).setDepth(STAIR_MENU_DEPTH + 1);
+    this.gameTimeText = this.add.text(GAME_WIDTH - 24, 2, this.getFormattedGameTime(), {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '16px',
+      color: '#f3f1e8',
+      stroke: '#05080c',
+      strokeThickness: 3,
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(STAIR_MENU_DEPTH + 1);
     this.createMinimap();
     this.createInventoryUi();
     this.createStairMenuUi();
@@ -512,21 +537,30 @@ class DungeonTestScene extends Phaser.Scene {
       floorItems.minimumRecipeItems,
       floorItems.maximumRecipeItems,
     );
+    const spawnedRecipeIds = new Set();
     for (let index = 0; index < recipeItemCount; index += 1) {
       const position = this.findOpenFloorItemTile();
       if (!position || recipeItemIds.length === 0) {
         return;
       }
+      const availableUnregisteredRecipeItemIds = unregisteredRecipeItemIds
+        .filter((id) => !spawnedRecipeIds.has(id));
+      const availableRegisteredRecipeItemIds = registeredRecipeItemIds
+        .filter((id) => !spawnedRecipeIds.has(id));
       const preferredRecipeItemIds = Math.random() < 0.7
-        ? unregisteredRecipeItemIds
-        : registeredRecipeItemIds;
-      const fallbackRecipeItemIds = preferredRecipeItemIds === unregisteredRecipeItemIds
-        ? registeredRecipeItemIds
-        : unregisteredRecipeItemIds;
+        ? availableUnregisteredRecipeItemIds
+        : availableRegisteredRecipeItemIds;
+      const fallbackRecipeItemIds = preferredRecipeItemIds === availableUnregisteredRecipeItemIds
+        ? availableRegisteredRecipeItemIds
+        : availableUnregisteredRecipeItemIds;
+      if (preferredRecipeItemIds.length === 0 && fallbackRecipeItemIds.length === 0) {
+        return;
+      }
       const recipeItemId = Phaser.Utils.Array.GetRandom(preferredRecipeItemIds.length > 0
         ? preferredRecipeItemIds
         : fallbackRecipeItemIds);
       this.placeFloorItem({ id: recipeItemId }, position.x, position.y);
+      spawnedRecipeIds.add(recipeItemId);
     }
   }
 
@@ -665,6 +699,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   update() {
+    this.gameTimeText?.setText(this.getFormattedGameTime());
     this.updateDiagonalInputIndicators();
     if (this.actionLog?.historyVisible) {
       const direction = this.moveKeys.UP.isDown ? 1 : this.moveKeys.DOWN.isDown ? -1 : 0;
@@ -2169,6 +2204,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.actionLog.add('TRAP_AVOIDED');
       return false;
     }
+    this.dashDirection = null;
     this.springTrapWarpPending = deferPresentation;
     this.applyItemUseEffect(
       { useEffectId: ITEM_EFFECT_FLYING_HERB },
@@ -2282,6 +2318,8 @@ class DungeonTestScene extends Phaser.Scene {
     const result = {
       cause,
       succeeded,
+      dungeonName: this.dungeonData.dungeonName,
+      gameTime: this.getFormattedGameTime(),
       status: {
         floor: this.playerStatus.floor,
         hitPoints: this.playerStatus.hitPoints,
@@ -2299,6 +2337,14 @@ class DungeonTestScene extends Phaser.Scene {
     } else {
       this.time.delayedCall(1000, () => this.scene.start('ResultScene', result));
     }
+  }
+
+  getFormattedGameTime() {
+    const elapsedSeconds = Math.max(0, Math.floor((Date.now() - this.playerStatus.runStartedAt) / 1000));
+    const hours = Math.floor(elapsedSeconds / 3600);
+    const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+    const seconds = elapsedSeconds % 60;
+    return [hours, minutes, seconds].map((value) => String(value).padStart(2, '0')).join(':');
   }
 
   getRangedDamage(baseDamage) {
@@ -2354,6 +2400,9 @@ class DungeonTestScene extends Phaser.Scene {
       enemy.paralysisTurns = 0;
       enemy.paralysisText.setVisible(false);
       this.actionLog.add('ENEMY_PARALYSIS_ENDED', { enemy: this.getEnemyLogName(enemy) });
+    }
+    if (actualDamage > 0) {
+      this.warpCharlotteToHealEnemy(enemy);
     }
   }
 
@@ -2595,6 +2644,10 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   startDash(direction) {
+    if (this.playerStatus.hunger === 0) {
+      this.queueMove(MOVE_INPUT_GRACE_MS, true, direction);
+      return;
+    }
     this.dashDirection = direction;
     this.queueMove(MOVE_INPUT_GRACE_MS, false, direction, true);
   }
@@ -2870,6 +2923,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.playerStatus.confusionJustEnded = false;
     const wasBranded = this.playerStatus.brandTurns > 0;
     this.playerStatus.advanceTurn(moved);
+    if (this.playerStatus.hunger === 0) {
+      this.dashDirection = null;
+    }
     if (this.playerStatus.hitPoints === 0) {
       this.showResult('空腹');
       return;
@@ -3112,6 +3168,58 @@ class DungeonTestScene extends Phaser.Scene {
       });
   }
 
+  warpCharlotteToHealEnemy(damagedEnemy) {
+    if (this.charlotteHealUsedThisTurn || !this.enemies.includes(damagedEnemy)) {
+      return false;
+    }
+    const charlottes = this.enemies.filter((enemy) => (
+      CHARLOTTE_HEAL_SKILL_IDS.includes(enemy.specialAbilityId)
+      && enemy.status == null
+      && enemy.charlotteHealCooldown <= 0
+    ));
+    const charlotte = Phaser.Utils.Array.GetRandom(charlottes);
+    if (!charlotte) {
+      return false;
+    }
+    const destinations = MOVE_DIRECTIONS.map((direction) => ({
+      x: damagedEnemy.tileX + direction.x,
+      y: damagedEnemy.tileY + direction.y,
+    })).filter((tile) => (
+      this.isWalkableTile(this.dungeonTiles[tile.y]?.[tile.x])
+      && !this.isTileOccupied(tile.x, tile.y)
+      && !this.isStairTile(tile.x, tile.y)
+    ));
+    const destination = Phaser.Utils.Array.GetRandom(destinations);
+    if (!destination) {
+      return false;
+    }
+    const healAmount = {
+      [ENEMY_SKILL_CHARLOTTE_HEAL]: 20,
+      [ENEMY_SKILL_GOLD_CHARLOTTE_HEAL]: 30,
+      [ENEMY_SKILL_MITHRIL_CHARLOTTE_HEAL]: 40,
+      [ENEMY_SKILL_ETA_CHARLOTTE_HEAL]: 50,
+    }[charlotte.specialAbilityId];
+    charlotte.idleTween?.stop();
+    charlotte.sprite.setScale(ENEMY_SCALE);
+    charlotte.needsIdleMotion = true;
+    charlotte.tileX = destination.x;
+    charlotte.tileY = destination.y;
+    charlotte.sprite.setPosition((destination.x + 0.5) * TILE_SIZE, (destination.y + 1) * TILE_SIZE);
+    this.updateCharacterDepth(charlotte.sprite, destination.y);
+    this.updateEnemySymbolDepth(charlotte);
+    const recoveredHitPoints = Math.min(healAmount, damagedEnemy.maxHitPoints - damagedEnemy.hitPoints);
+    damagedEnemy.hitPoints += recoveredHitPoints;
+    charlotte.charlotteHealCooldown = 5;
+    this.charlotteHealUsedThisTurn = true;
+    this.playEnemyWarpSfx();
+    this.actionLog.add('ENEMY_CHARLOTTE_HEALS', {
+      enemy: this.getEnemyLogName(charlotte),
+      target: this.getEnemyLogName(damagedEnemy),
+      amount: recoveredHitPoints,
+    });
+    return true;
+  }
+
   resolveEnemyTurn() {
     const movements = [];
     const attacks = [];
@@ -3139,6 +3247,9 @@ class DungeonTestScene extends Phaser.Scene {
       }
       if (enemy.lenoreConfusionCooldown > 0) {
         enemy.lenoreConfusionCooldown -= 1;
+      }
+      if (enemy.charlotteHealCooldown > 0) {
+        enemy.charlotteHealCooldown -= 1;
       }
       if (enemy.speedTurns > 0) {
         enemy.speedTurns -= 1;
@@ -3207,6 +3318,9 @@ class DungeonTestScene extends Phaser.Scene {
       if (enemy.confusionTurns > 0) {
         this.resolveConfusedEnemyTurn(enemy, movements, attacks);
         this.advanceEnemyConfusion(enemy);
+        continue;
+      }
+      if (this.useYuminWakeAll(enemy)) {
         continue;
       }
       if (this.useHeartPeace(enemy, attacks)) {
@@ -4030,6 +4144,14 @@ class DungeonTestScene extends Phaser.Scene {
   activateIsaacHayesInvasion() {
     const floorEnemies = this.dungeonData.enemyMap.get(this.playerStatus.floor);
     if (
+      !this.isaacHayesWarningAnnounced
+      && floorEnemies?.turnLimit
+      && this.floorTurn === floorEnemies.turnLimit - 100
+    ) {
+      this.isaacHayesWarningAnnounced = true;
+      this.actionLog.add('ENEMY_ISAAC_WARNING');
+    }
+    if (
       this.isaacHayesInvasion
       || !floorEnemies?.turnLimit
       || this.floorTurn < floorEnemies.turnLimit
@@ -4251,6 +4373,7 @@ class DungeonTestScene extends Phaser.Scene {
   createHyunwooChargeAction(enemy) {
     if (
       ![
+        ENEMY_SKILL_HYUNWOO_CHARGE,
         ENEMY_SKILL_GOLD_HYUNWOO_CHARGE,
         ENEMY_SKILL_MITHRIL_HYUNWOO_CHARGE,
         ENEMY_SKILL_ETA_HYUNWOO_CHARGE,
@@ -4391,6 +4514,7 @@ class DungeonTestScene extends Phaser.Scene {
   resolveHyunwooCharge(enemy, target, collisionTarget) {
     this.dashDirection = null;
     const damage = {
+      [ENEMY_SKILL_HYUNWOO_CHARGE]: 10,
       [ENEMY_SKILL_GOLD_HYUNWOO_CHARGE]: 20,
       [ENEMY_SKILL_MITHRIL_HYUNWOO_CHARGE]: 30,
       [ENEMY_SKILL_ETA_HYUNWOO_CHARGE]: 40,

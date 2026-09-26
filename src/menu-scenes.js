@@ -99,6 +99,8 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
     this.load.text('version-data', `assets/data/version.txt?v=${Date.now()}`);
+    this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
+    this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
     this.load.text('item-data', 'assets/data/item.csv');
     this.load.image('item-icon-sword', 'assets/image/IconSword.png');
     this.load.image('item-icon-bow', 'assets/image/IconBow.png?v=2');
@@ -133,17 +135,36 @@ class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.titleSelection = 0;
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
+    const dungeonOptions = [
+      { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
+      { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
+    ].map((option) => ({
+      ...option,
+      data: GameData.parseDungeonData(this.cache.text.get(option.key)),
+    }));
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.titleMenuItems = [
-      this.createTitleMenuItem(380, 'ルミア島の地下迷宮', () => {
+      this.createTitleMenuItem(372, dungeonOptions[0].data.dungeonName, () => {
         this.sound.play('se-cursor-enter');
-        this.scene.start('DungeonTestScene', { newRun: true });
-      }, '地下 30 階'),
-      this.createTitleMenuItem(468, 'レシピ図鑑', () => this.openRecipeBook()),
-      this.createTitleMenuItem(546, 'オプション', () => this.openOptionsMenu()),
+        this.scene.start('DungeonTestScene', {
+          newRun: true,
+          dungeonDataKey: dungeonOptions[0].key,
+          dungeonDataFile: dungeonOptions[0].file,
+        });
+      }, dungeonOptions[0].data.dungeonDescription ?? ''),
+      this.createTitleMenuItem(464, dungeonOptions[1].data.dungeonName, () => {
+        this.sound.play('se-cursor-enter');
+        this.scene.start('DungeonTestScene', {
+          newRun: true,
+          dungeonDataKey: dungeonOptions[1].key,
+          dungeonDataFile: dungeonOptions[1].file,
+        });
+      }, dungeonOptions[1].data.dungeonDescription ?? ''),
+      this.createTitleMenuItem(556, 'レシピ図鑑', () => this.openRecipeBook()),
+      this.createTitleMenuItem(648, 'オプション', () => this.openOptionsMenu()),
     ];
     this.updateTitleMenuSelection();
-    this.add.text(GAME_WIDTH / 2, 650, '上下キー: 選択    Zキー: 決定', {
+    this.add.text(GAME_WIDTH / 2, 708, '上下キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
       color: '#f3f1e8',
@@ -179,7 +200,7 @@ class TitleScene extends Phaser.Scene {
   }
 
   createTitleMenuItem(y, label, action, subtitle = '') {
-    const height = subtitle ? 84 : 66;
+    const height = 84;
     const background = this.add.rectangle(GAME_WIDTH / 2, y, 420, height, 0x384d58)
       .setStrokeStyle(2, 0x6e8996)
       .setInteractive({ useHandCursor: true });
@@ -298,18 +319,30 @@ class ResultScene extends Phaser.Scene {
     const succeeded = result?.succeeded === true;
     const status = result?.status ?? {};
     const equipment = result?.equipment ?? [];
+    const dungeonName = result?.dungeonName ?? '';
+    const gameTime = result?.gameTime ?? '00:00:00';
     this.add.text(GAME_WIDTH / 2, 90, succeeded ? '任務成功' : '任務失敗', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '46px',
       color: succeeded ? '#76d7ea' : '#ffdc4a',
     }).setOrigin(0.5);
+    this.add.text(GAME_WIDTH / 2, 145, dungeonName, {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '22px',
+      color: '#9ab5c7',
+    }).setOrigin(0.5);
     if (!succeeded) {
-      this.add.text(GAME_WIDTH / 2, 165, `死因: ${result?.cause ?? '力尽きた'}`, {
+      this.add.text(GAME_WIDTH / 2, 185, `死因: ${result?.cause ?? '力尽きた'}`, {
         fontFamily: 'Yusei Magic, sans-serif',
         fontSize: '25px',
         color: '#f3f1e8',
       }).setOrigin(0.5);
     }
+    this.add.text(GAME_WIDTH / 2, 215, `ゲーム時間: ${gameTime}`, {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '22px',
+      color: '#9ab5c7',
+    }).setOrigin(0.5);
     const statusLines = [
       `到達階層: 地下${status.floor ?? 1}階`,
       `レベル: ${status.level ?? 1}`,
@@ -317,13 +350,13 @@ class ResultScene extends Phaser.Scene {
       `満腹度: ${status.hunger ?? 0} / ${status.maxHunger ?? 0}`,
       `攻撃力: ${status.attack ?? 0}    防御力: ${status.defense ?? 0}`,
     ];
-    this.add.text(300, 245, `最終ステータス\n\n${statusLines.join('\n')}`, {
+    this.add.text(300, 270, `最終ステータス\n\n${statusLines.join('\n')}`, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '23px',
       color: '#f3f1e8',
       lineSpacing: 8,
     });
-    this.add.text(720, 245, `装備\n\n${equipment.join('\n') || 'なし'}`, {
+    this.add.text(720, 270, `装備\n\n${equipment.join('\n') || 'なし'}`, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '23px',
       color: '#f3f1e8',

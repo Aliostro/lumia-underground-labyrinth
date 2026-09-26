@@ -168,13 +168,21 @@ class DungeonGenerator {
         return true;
       }
 
+      const previous = path[index - 1];
+      const next = path[index + 1];
       return [[0, -1], [1, 0], [0, 1], [-1, 0]].every(([offsetX, offsetY]) => {
         const neighborX = tile.x + offsetX;
         const neighborY = tile.y + offsetY;
-        const previous = path[index - 1];
-        const next = path[index + 1];
         const isPathNeighbor = (previous && previous.x === neighborX && previous.y === neighborY)
           || (next && next.x === neighborX && next.y === neighborY);
+
+        const runsParallelToRoom = tiles[neighborY][neighborX] === 1
+          && [previous, next].some((pathTile) => pathTile && (
+            offsetY !== 0 ? pathTile.y === tile.y : pathTile.x === tile.x
+          ));
+        if (runsParallelToRoom) {
+          return false;
+        }
 
         return tiles[neighborY][neighborX] === 0 || isPathNeighbor;
       });

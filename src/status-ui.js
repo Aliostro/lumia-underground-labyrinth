@@ -39,7 +39,7 @@ class StatusUi {
       ...textStyle,
       fontSize: '18px',
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(this.depth);
-    this.scene.add.text(hungerX + 14, this.y + 12, '満腹度', {
+    this.hungerLabelText = this.scene.add.text(hungerX + 14, this.y + 12, '満腹度', {
       ...textStyle,
       fontSize: '18px',
     }).setScrollFactor(0).setDepth(this.depth);
@@ -131,6 +131,9 @@ class StatusUi {
     this.healthLabelText.setColor(hitPointsColor);
     this.hitPointsText.setColor(hitPointsColor);
     this.hungerText.setText(`${playerStatus.hunger} / ${playerStatus.maxHunger}`);
+    const hungerColor = playerStatus.hunger === 0 ? '#df5b62' : '#f3f1e8';
+    this.hungerLabelText.setColor(hungerColor);
+    this.hungerText.setColor(hungerColor);
     this.attackText.setText(playerStatus.attack);
     this.defenseText.setText(playerStatus.defense);
     this.equipmentTexts.forEach((text, index) => {

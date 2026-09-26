@@ -298,6 +298,7 @@ const TurnSystem = {
     this.enemyViolinSfxPlayed = false;
     this.enemyWarpSfxPlayed = false;
     this.advanceFirePillars();
+    this.charlotteHealUsedThisTurn = false;
     this.advanceEnemyRespawn();
     this.updateVisibility();
     this.drawMinimapMarker();
