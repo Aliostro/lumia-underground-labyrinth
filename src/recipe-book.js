@@ -158,7 +158,9 @@ class RecipeBook {
       text.setColor(selected && recipe ? '#ffdc4a' : '#f3f1e8');
     });
     const selectedRecipe = recipes[this.selectedIndex];
-    this.descriptionText.setText(selectedRecipe ? selectedRecipe.description : '登録済みのレシピはありません。');
+    const result = selectedRecipe && this.getResultDefinition(selectedRecipe);
+    const description = selectedRecipe?.description ?? '登録済みのレシピはありません。';
+    this.descriptionText.setText(result ? `${description}\n“${result.description}”` : description);
   }
 
   getResultDefinition(recipeDefinition) {

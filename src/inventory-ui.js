@@ -155,7 +155,13 @@ const InventoryUiBehavior = {
     });
     const selectedItem = this.getSelectedInventoryItem();
     const selectedDefinition = selectedItem && this.itemDefinitions.get(selectedItem.id);
-    this.inventoryDescriptionText.setText(selectedDefinition?.description ?? '空き枠');
+    const selectedRecipeResult = selectedDefinition?.category === 80
+      ? this.getRecipeResultDefinition(selectedDefinition)
+      : null;
+    const description = selectedDefinition?.description ?? '空き枠';
+    this.inventoryDescriptionText.setText(selectedRecipeResult
+      ? `${description}\n“${selectedRecipeResult.description}”`
+      : description);
     this.refreshInventoryBorder();
   },
 
