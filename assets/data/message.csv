@@ -60,6 +60,7 @@
 "SPRING_TRAP_TRIGGERED","スプリングの罠を踏んだ！"
 "MINE_TRAP_TRIGGERED","地雷の罠を踏んだ！{damage}ダメージを受けた。"
 "PLAYER_TRAP_AVOIDANCE","罠避け状態になった！"
+"PLAYER_CONFUSION_IMMUNITY","混乱防止状態になった！"
 "TRAP_AVOIDED","罠を避けた！"
 "FIRE_PILLAR_HIT_PLAYER","炎柱で{damage}ダメージを受けた。"
 "FIRE_PILLAR_HIT_ENEMY","{enemy}は炎柱で{damage}ダメージを受けた。"

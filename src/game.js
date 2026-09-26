@@ -40,7 +40,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     this.load.text('message-data', `assets/data/message.csv?v=${Date.now()}`);
     this.load.text('item-data', 'assets/data/item.csv');
-    this.load.text('item-equip-effect-data', 'assets/data/item-equip-eff.csv');
+    this.load.text('item-equip-effect-data', `assets/data/item-equip-eff.csv?v=${Date.now()}`);
     this.load.text('item-effect-data', 'assets/data/item-effect.csv');
     this.load.text('craft-data', 'assets/data/craft.csv');
     this.load.image('Chara0002.png', 'assets/image/Chara0002.png');
@@ -1061,6 +1061,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.playerStatus.brainwashed = false;
     this.playerStatus.peaceTurns = 0;
     this.playerStatus.trapAvoidance = false;
+    this.playerStatus.confusionImmunity = false;
     this.playerStatus.floor += 1;
     this.cameras.main.fadeOut(250, 0, 0, 0);
     this.time.delayedCall(250, () => {
@@ -1287,11 +1288,25 @@ class DungeonTestScene extends Phaser.Scene {
       this.actionLog.add('PLAYER_TRAP_AVOIDANCE');
       return;
     }
+    if (definition.useEffectId === ITEM_EFFECT_CONFUSION_IMMUNITY) {
+      this.playerStatus.confusionImmunity = true;
+      this.actionLog.add('PLAYER_CONFUSION_IMMUNITY');
+      return;
+    }
     if (definition.useEffectId === ITEM_EFFECT_CALMING_HERB) {
       if (this.playerStatus.confusionTurns > 0) {
         this.playerStatus.confusionTurns = 0;
         this.actionLog.add('CONFUSION_ENDED', { target: 'プレイヤー' });
       }
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_LUCKY_HERB) {
+      this.playerStatus.gainExperience(
+        this.playerStatus.getNextLevelExperience() - this.playerStatus.experience,
+      );
+      this.playerStatus.experience = this.playerStatus.getLevelStartExperience(this.playerStatus.level);
+      this.playSfx('se-level-up');
+      this.actionLog.add('LEVEL_UP', { level: this.playerStatus.level });
       return;
     }
     if (definition.useEffectId === ITEM_EFFECT_HASTE_HERB) {
@@ -1530,15 +1545,19 @@ class DungeonTestScene extends Phaser.Scene {
       return false;
     }
     const definition = this.itemDefinitions.get(weapon.id);
-    const shot = this.getRangedWeaponTarget(direction);
+    const piercesEnemies = this.hasEquipEffect(ITEM_EQUIP_EFFECT_PIERCE_SHOT);
+    const shot = this.getRangedWeaponTarget(
+      direction,
+      piercesEnemies,
+    );
     this.playSfx('se-long-range-attack');
     this.actionLog.add('PLAYER_RANGED_WEAPON_FIRED', { item: definition.name });
     this.isHeroMoving = true;
     this.idleTween.stop();
     this.hero.setScale(HERO_SCALE);
-    const playerAttack = shot.enemy
-      ? this.playerAttack(shot.enemy, true)
-      : {
+    const individualPlayerAttacks = shot.enemies.length > 0
+      ? shot.enemies.map((enemy) => this.playerAttack(enemy, true))
+      : [{
         sprite: this.hero,
         ranged: true,
         targetX: (shot.destination.x + 0.5) * TILE_SIZE,
@@ -1547,7 +1566,15 @@ class DungeonTestScene extends Phaser.Scene {
           this.playSfx('se-miss');
           this.actionLog.add('PLAYER_RANGED_NOTHING_HIT');
         },
-      };
+      }];
+    const playerAttacks = piercesEnemies && shot.enemies.length > 0
+      ? [{
+        ...individualPlayerAttacks[0],
+        targetX: (shot.destination.x + 0.5) * TILE_SIZE,
+        targetY: (shot.destination.y + 0.5) * TILE_SIZE,
+        onComplete: () => individualPlayerAttacks.forEach((attack) => attack.onComplete?.()),
+      }]
+      : individualPlayerAttacks;
     weapon.usesRemaining -= 1;
     if (weapon.usesRemaining <= 0) {
       this.removeInventoryOrFloorItem(weapon);
@@ -1557,12 +1584,13 @@ class DungeonTestScene extends Phaser.Scene {
     this.refreshInventoryUi();
     this.resolvePlayerTurn(false);
     const enemyTurn = this.resolveEnemyTurnAfterPlayerAction();
-    this.playTurnAnimations(null, enemyTurn.movements, false, [playerAttack], enemyTurn.attacks);
+    this.playTurnAnimations(null, enemyTurn.movements, false, playerAttacks, enemyTurn.attacks);
     return true;
   }
 
-  getRangedWeaponTarget(direction) {
+  getRangedWeaponTarget(direction, piercesEnemies = false) {
     let destination = { x: this.heroTileX, y: this.heroTileY };
+    const enemies = [];
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
@@ -1572,10 +1600,13 @@ class DungeonTestScene extends Phaser.Scene {
       destination = { x: tileX, y: tileY };
       const enemy = this.getEnemyAt(tileX, tileY);
       if (enemy) {
-        return { destination, enemy };
+        enemies.push(enemy);
+        if (!piercesEnemies) {
+          break;
+        }
       }
     }
-    return { destination, enemy: null };
+    return { destination, enemies };
   }
 
   useDirectionalWarp(item, definition, direction) {
@@ -1976,6 +2007,19 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   applyItemEffectToEnemy(definition, enemy) {
+    if (definition.useEffectId === ITEM_EFFECT_LUCKY_HERB) {
+      if (this.isJackie(enemy)) {
+        enemy.attack += 5;
+        enemy.hitPoints = enemy.maxHitPoints;
+        enemy.jackieLevel += 1;
+        enemy.jackieLevelText.setText(`Lv${enemy.jackieLevel}`);
+        this.playSfx('se-level-up');
+        this.actionLog.add('ENEMY_JACKIE_ADRENALINE', { enemy: this.getEnemyLogName(enemy) });
+        return;
+      }
+      this.evolveEnemy(enemy);
+      return;
+    }
     if (definition.useEffectId === ITEM_EFFECT_HASTE_HERB) {
       if (enemy.slowTurns > 0) {
         enemy.slowTurns = 0;
@@ -3070,6 +3114,20 @@ class DungeonTestScene extends Phaser.Scene {
         enemy: this.getEnemyLogName(enemy),
         damage,
       });
+      if (
+        !ranged
+        && enemy.hitPoints > 0
+        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK)
+        && Math.random() < ALMAS_SLOW_CHANCE
+      ) {
+        if (enemy.speedTurns > 0) {
+          enemy.speedTurns = 0;
+        } else {
+          enemy.slowTurns = SLOW_TURN_COUNT;
+          enemy.slowSkipNextTurn = true;
+          this.actionLog.add('ENEMY_SLOWED', { enemy: this.getEnemyLogName(enemy) });
+        }
+      }
       if (!ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_LIFE_STEAL)) {
         const recoveredHitPoints = Math.floor(damage * 0.3);
         this.playerStatus.hitPoints = Math.min(
@@ -3169,7 +3227,11 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   warpCharlotteToHealEnemy(damagedEnemy) {
-    if (this.charlotteHealUsedThisTurn || !this.enemies.includes(damagedEnemy)) {
+    if (
+      this.charlotteHealUsedThisTurn
+      || !this.enemies.includes(damagedEnemy)
+      || CHARLOTTE_HEAL_SKILL_IDS.includes(damagedEnemy.specialAbilityId)
+    ) {
       return false;
     }
     const charlottes = this.enemies.filter((enemy) => (
@@ -3542,14 +3604,15 @@ class DungeonTestScene extends Phaser.Scene {
     }
     const targets = [];
     if (
-      !this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_IMMUNITY)
+      this.playerStatus.peaceTurns === 0
+      && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_IMMUNITY)
       && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_AND_PARALYSIS_IMMUNITY)
     ) {
       this.playerStatus.peaceTurns = PEACE_TURN_COUNT;
       targets.push({ tileX: this.heroTileX, tileY: this.heroTileY });
     }
     this.enemies.forEach((target) => {
-      if (target.status != null || !settings.isTargetInRange(target)) {
+      if (target.status != null || target.peaceTurns > 0 || !settings.isTargetInRange(target)) {
         return;
       }
       target.peaceTurns = PEACE_TURN_COUNT;
@@ -4460,6 +4523,9 @@ class DungeonTestScene extends Phaser.Scene {
       this.heroTileX = knockback.x;
       this.heroTileY = knockback.y;
     } else {
+      target.idleTween?.stop();
+      target.sprite.setScale(ENEMY_SCALE);
+      target.needsIdleMotion = true;
       target.tileX = knockback.x;
       target.tileY = knockback.y;
       this.updateCharacterDepth(target.sprite, knockback.y);
@@ -4891,6 +4957,7 @@ class DungeonTestScene extends Phaser.Scene {
       if (status === 'confusion') {
         if (
           this.playerStatus.confusionTurns > 0
+          || this.playerStatus.confusionImmunity
           || this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY)
         ) {
           return;
@@ -4915,7 +4982,8 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('PLAYER_PARALYZED');
       } else if (status === 'peace') {
         if (
-          this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_IMMUNITY)
+          this.playerStatus.peaceTurns > 0
+          || this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_IMMUNITY)
           || this.hasEquipEffect(ITEM_EQUIP_EFFECT_PEACE_AND_PARALYSIS_IMMUNITY)
         ) {
           return;
@@ -4956,6 +5024,9 @@ class DungeonTestScene extends Phaser.Scene {
       target.paralysisTurns = PARALYSIS_TURN_COUNT;
       this.actionLog.add('ENEMY_PARALYZED', { enemy: this.getEnemyLogName(target) });
     } else if (status === 'peace') {
+      if (target.peaceTurns > 0) {
+        return;
+      }
       target.peaceTurns = PEACE_TURN_COUNT;
     } else if (status === 'sleep') {
       this.applySleepToEnemy(target);

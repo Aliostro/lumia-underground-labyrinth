@@ -54,6 +54,7 @@ const EnemyAbilities = {
     const targets = [];
     if (
       this.playerStatus.confusionTurns === 0
+      && !this.playerStatus.confusionImmunity
       && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY)
     ) {
       this.playerStatus.confusionTurns = CONFUSION_TURN_COUNT;

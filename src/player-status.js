@@ -25,6 +25,7 @@ class PlayerStatus {
     this.brainwashed = false;
     this.peaceTurns = 0;
     this.trapAvoidance = false;
+    this.confusionImmunity = false;
     this.equipmentMaxHitPointBonus = 0;
     this.inventory = [];
     this.inventoryCapacity = 20;
