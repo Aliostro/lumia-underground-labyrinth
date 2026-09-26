@@ -5,7 +5,7 @@ const EnemySystem = {
       this.enemies = [];
       return;
     }
-    const enemyCount = Phaser.Math.Between(
+    const enemyCount = this.getInitialRandomInteger(
       floorEnemies.minimumEnemies,
       floorEnemies.maximumEnemies,
     );
@@ -17,7 +17,7 @@ const EnemySystem = {
 
   spawnMonsterHouse() {
     const floorEnemies = this.dungeonData.enemyMap.get(this.playerStatus.floor);
-    if (!floorEnemies || Math.random() * 100 >= floorEnemies.monsterHouseChance) {
+    if (!floorEnemies || this.getInitialRandom() * 100 >= floorEnemies.monsterHouseChance) {
       return false;
     }
     const heroRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
@@ -39,14 +39,14 @@ const EnemySystem = {
       && candidate.enemies.length + candidate.openTiles.length >= candidate.targetCount
       && this.enemies.length - candidate.enemies.length + candidate.targetCount <= this.dungeonData.maxEnemies
     ));
-    const monsterHouse = Phaser.Utils.Array.GetRandom(rooms);
+    const monsterHouse = this.getInitialRandomItem(rooms);
     if (!monsterHouse) {
       return false;
     }
     this.monsterHouseRoom = monsterHouse.room;
     this.monsterHouseAnnounced = false;
     const occupiedTiles = monsterHouse.enemies.map((enemy) => ({ x: enemy.tileX, y: enemy.tileY }));
-    const spawnTiles = Phaser.Utils.Array.Shuffle([...monsterHouse.openTiles])
+    const spawnTiles = this.shuffleInitialItems(monsterHouse.openTiles)
       .slice(0, monsterHouse.targetCount - occupiedTiles.length);
     spawnTiles.forEach((tile) => this.spawnEnemy(floorEnemies, tile));
     this.enemies
@@ -64,7 +64,7 @@ const EnemySystem = {
       }
       const item = itemEntries
         ? this.chooseFloorItem(itemEntries)
-        : { id: Phaser.Utils.Array.GetRandom(itemIds) };
+        : { id: this.getInitialRandomItem(itemIds) };
       if (item) {
         this.placeFloorItem(item, tile.x, tile.y);
       }
@@ -81,7 +81,7 @@ const EnemySystem = {
     if (!spawnPosition) {
       const heroRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
       const availableRooms = this.dungeonRooms.filter((room) => room !== heroRoom);
-      const room = Phaser.Utils.Array.GetRandom(availableRooms);
+      const room = this.getInitialRandomItem(availableRooms);
       spawnPosition = room && this.findOpenTileInRoom(room);
     }
     if (!definition || !spawnPosition) {
@@ -106,12 +106,12 @@ const EnemySystem = {
       slowSkipNextTurn: KATJA_AIMED_SHOT_SKILL_IDS.includes(definition.specialAbilityId),
       status: !startsAwake
         && definition.specialAbilityId !== ENEMY_SKILL_EMMA_DISGUISE
-        && Math.random() < SPAWN_SLEEP_CHANCE
+        && this.getInitialRandom() < SPAWN_SLEEP_CHANCE
         ? 'spawn-sleep'
         : null,
     };
     if (enemy.disguised) {
-      const itemDefinition = Phaser.Utils.Array.GetRandom([...this.itemDefinitions.values()]);
+      const itemDefinition = this.getInitialRandomItem([...this.itemDefinitions.values()]);
       const iconKey = ITEM_ICON_KEYS[itemDefinition.category] || ITEM_ICON_KEYS[90];
       enemy.sprite.setTexture(iconKey)
         .setOrigin(0.5)
@@ -215,7 +215,7 @@ const EnemySystem = {
 
   chooseEnemy(entries) {
     const totalWeight = entries.reduce((total, entry) => total + entry.weight, 0);
-    let roll = Math.random() * totalWeight;
+    let roll = this.getInitialRandom() * totalWeight;
     for (const entry of entries) {
       roll -= entry.weight;
       if (roll < 0) {
@@ -234,6 +234,6 @@ const EnemySystem = {
         }
       }
     }
-    return Phaser.Utils.Array.GetRandom(candidates);
+    return this.getInitialRandomItem(candidates);
   },
 };

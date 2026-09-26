@@ -6,6 +6,7 @@ class DungeonTestScene extends Phaser.Scene {
   init(data) {
     this.dungeonDataKey = data?.dungeonDataKey ?? this.dungeonDataKey ?? 'dungeon-data-0001';
     this.dungeonDataFile = data?.dungeonDataFile ?? this.dungeonDataFile ?? 'dungeon-0001.dat';
+    this.parallelCode = data?.parallelCode ?? this.parallelCode ?? null;
   }
 
   preload() {
@@ -127,10 +128,6 @@ class DungeonTestScene extends Phaser.Scene {
     this.dungeonData = GameData.parseDungeonData(this.cache.text.get(this.dungeonDataKey));
     this.messageData = GameData.parseMessageData(this.cache.text.get('message-data'));
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
-    const dungeon = new DungeonGenerator().generate();
-    this.dungeonTiles = dungeon.tiles;
-    this.dungeonRooms = dungeon.rooms;
-    this.corridorTiles = this.getCorridorTiles();
     const continuesExistingRun = data?.newRun !== true && data?.playerStatus != null;
     this.playerStatus = continuesExistingRun ? data.playerStatus : new PlayerStatus();
     if (!continuesExistingRun) {
@@ -138,6 +135,13 @@ class DungeonTestScene extends Phaser.Scene {
       this.playerStatus.setLevel(this.dungeonData.startLevel);
       this.dungeonData.startItems.forEach((itemId) => this.playerStatus.addItem(itemId, 1, this.itemDefinitions));
     }
+    this.initialRandom = this.parallelCode
+      ? createParallelFloorRandom(this.parallelCode, this.playerStatus.floor)
+      : null;
+    const dungeon = new DungeonGenerator(() => this.getInitialRandom()).generate();
+    this.dungeonTiles = dungeon.tiles;
+    this.dungeonRooms = dungeon.rooms;
+    this.corridorTiles = this.getCorridorTiles();
     this.playerStatus.runStartedAt ??= Date.now();
     this.floorItems = [];
     this.floorTurn = 0;
@@ -160,7 +164,7 @@ class DungeonTestScene extends Phaser.Scene {
     });
     this.dungeonRenderer.draw(dungeon);
 
-    const spawnRoom = Phaser.Utils.Array.GetRandom(dungeon.rooms);
+    const spawnRoom = this.getInitialRandomItem(dungeon.rooms);
     this.heroTileX = spawnRoom.centerX;
     this.heroTileY = spawnRoom.centerY;
     this.hero = this.add.image(
@@ -219,6 +223,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.spawnEnemies(dungeon.rooms);
     this.spawnFloorItems();
     this.spawnMonsterHouse();
+    this.initialRandom = null;
     this.enemyRespawnTurns = 0;
 
     this.cameras.main.startFollow(this.hero);
@@ -248,6 +253,16 @@ class DungeonTestScene extends Phaser.Scene {
       stroke: '#05080c',
       strokeThickness: 3,
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(STAIR_MENU_DEPTH + 1);
+    if (this.parallelCode) {
+      this.parallelCodeText = this.add.text(GAME_WIDTH - 24, 2, `(${this.parallelCode})`, {
+        fontFamily: 'Yusei Magic, sans-serif',
+        fontSize: '16px',
+        color: '#9ab5c7',
+        stroke: '#05080c',
+        strokeThickness: 3,
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(STAIR_MENU_DEPTH + 1);
+      this.gameTimeText.setY(24);
+    }
     this.createMinimap();
     this.createInventoryUi();
     this.createStairMenuUi();
@@ -453,6 +468,30 @@ class DungeonTestScene extends Phaser.Scene {
     this.sound.play(key, config);
   }
 
+  getInitialRandom() {
+    return this.initialRandom ? this.initialRandom() : Math.random();
+  }
+
+  getInitialRandomInteger(minimum, maximum) {
+    return Math.floor(this.getInitialRandom() * (maximum - minimum + 1)) + minimum;
+  }
+
+  getInitialRandomItem(items) {
+    if (!items?.length) {
+      return null;
+    }
+    return items[Math.floor(this.getInitialRandom() * items.length)];
+  }
+
+  shuffleInitialItems(items) {
+    const shuffled = [...items];
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+      const swapIndex = this.getInitialRandomInteger(0, index);
+      [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+    }
+    return shuffled;
+  }
+
   playEnemyWarpSfx() {
     if (this.enemyWarpSfxPlayed) {
       return;
@@ -515,7 +554,7 @@ class DungeonTestScene extends Phaser.Scene {
     if (!floorItems) {
       return;
     }
-    const itemCount = Phaser.Math.Between(floorItems.minimumItems, floorItems.maximumItems);
+    const itemCount = this.getInitialRandomInteger(floorItems.minimumItems, floorItems.maximumItems);
     for (let index = 0; index < itemCount; index += 1) {
       const item = this.chooseFloorItem(floorItems.entries);
       const position = this.findOpenFloorItemTile();
@@ -527,13 +566,13 @@ class DungeonTestScene extends Phaser.Scene {
     if (!floorItems.recipeDropEnabled) {
       return;
     }
-    const registeredRecipeIds = RecipeBook.getRegisteredIds();
+    const registeredRecipeIds = this.initialRandom ? new Set() : RecipeBook.getRegisteredIds();
     const recipeItemIds = [...this.itemDefinitions.values()]
       .filter((definition) => definition.category === 80)
       .map((definition) => definition.id);
     const unregisteredRecipeItemIds = recipeItemIds.filter((id) => !registeredRecipeIds.has(id));
     const registeredRecipeItemIds = recipeItemIds.filter((id) => registeredRecipeIds.has(id));
-    const recipeItemCount = Phaser.Math.Between(
+    const recipeItemCount = this.getInitialRandomInteger(
       floorItems.minimumRecipeItems,
       floorItems.maximumRecipeItems,
     );
@@ -547,7 +586,7 @@ class DungeonTestScene extends Phaser.Scene {
         .filter((id) => !spawnedRecipeIds.has(id));
       const availableRegisteredRecipeItemIds = registeredRecipeItemIds
         .filter((id) => !spawnedRecipeIds.has(id));
-      const preferredRecipeItemIds = Math.random() < 0.7
+      const preferredRecipeItemIds = this.getInitialRandom() < 0.7
         ? availableUnregisteredRecipeItemIds
         : availableRegisteredRecipeItemIds;
       const fallbackRecipeItemIds = preferredRecipeItemIds === availableUnregisteredRecipeItemIds
@@ -556,7 +595,7 @@ class DungeonTestScene extends Phaser.Scene {
       if (preferredRecipeItemIds.length === 0 && fallbackRecipeItemIds.length === 0) {
         return;
       }
-      const recipeItemId = Phaser.Utils.Array.GetRandom(preferredRecipeItemIds.length > 0
+      const recipeItemId = this.getInitialRandomItem(preferredRecipeItemIds.length > 0
         ? preferredRecipeItemIds
         : fallbackRecipeItemIds);
       this.placeFloorItem({ id: recipeItemId }, position.x, position.y);
@@ -566,7 +605,7 @@ class DungeonTestScene extends Phaser.Scene {
 
   chooseFloorItem(entries) {
     const totalWeight = entries.reduce((total, entry) => total + entry.weight, 0);
-    let roll = Math.random() * totalWeight;
+    let roll = this.getInitialRandom() * totalWeight;
     for (const entry of entries) {
       roll -= entry.weight;
       if (roll < 0) {
@@ -587,7 +626,7 @@ class DungeonTestScene extends Phaser.Scene {
         }
       }
     });
-    return Phaser.Utils.Array.GetRandom(candidates);
+    return this.getInitialRandomItem(candidates);
   }
 
   spawnStairs() {
@@ -601,7 +640,7 @@ class DungeonTestScene extends Phaser.Scene {
         }
       }
     });
-    const position = Phaser.Utils.Array.GetRandom(candidates);
+    const position = this.getInitialRandomItem(candidates);
     if (!position) {
       this.stairs = null;
       return;
@@ -1065,7 +1104,11 @@ class DungeonTestScene extends Phaser.Scene {
     this.playerStatus.floor += 1;
     this.cameras.main.fadeOut(250, 0, 0, 0);
     this.time.delayedCall(250, () => {
-      this.scene.restart({ playerStatus: this.playerStatus, fadeIn: true });
+      this.scene.restart({
+        playerStatus: this.playerStatus,
+        fadeIn: true,
+        parallelCode: this.parallelCode,
+      });
     });
   }
 
@@ -4433,7 +4476,7 @@ class DungeonTestScene extends Phaser.Scene {
           this.playSfx('se-enemy-attack');
           const damage = enemy.attack;
           if (target === this.hero) {
-            const actualDamage = this.applyHeroDamage(damage);
+            const actualDamage = this.applyHeroDamage(damage, this.getEnemyLogName(enemy));
             this.dashDirection = null;
             this.updateStatusUi();
             this.actionLog.add('ENEMY_ATTACK', { enemy: this.getEnemyLogName(enemy), damage: actualDamage });
@@ -5616,8 +5659,8 @@ class DungeonTestScene extends Phaser.Scene {
     };
     const summonCount = summonCounts[enemy.specialAbilityId];
     const summonCandidates = MOVE_DIRECTIONS.map((direction) => ({
-      x: this.heroTileX + direction.x,
-      y: this.heroTileY + direction.y,
+      x: enemy.tileX + direction.x,
+      y: enemy.tileY + direction.y,
     })).filter((candidate) => (
       this.isWalkableTile(this.dungeonTiles[candidate.y]?.[candidate.x])
       && !this.isTileOccupied(candidate.x, candidate.y)

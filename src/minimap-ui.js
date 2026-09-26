@@ -92,16 +92,14 @@ class MinimapUi {
       const enemyX = originX + (enemy.tileX + 0.5) * scale;
       const enemyY = originY + (enemy.tileY + 0.5) * scale;
       this.marker.fillCircle(enemyX, enemyY, markerRadius);
-      if (enemy.disguised && !enemyLocationRevealed) {
-        this.marker.lineStyle(0.5, 0x000000);
-        this.marker.strokeCircle(enemyX, enemyY, markerRadius);
-      }
+      this.marker.lineStyle(0.5, 0x000000);
+      this.marker.strokeCircle(enemyX, enemyY, markerRadius);
     });
     this.marker.fillStyle(0xffdc4a);
-    this.marker.fillCircle(
-      originX + (this.scene.heroTileX + 0.5) * scale,
-      originY + (this.scene.heroTileY + 0.5) * scale,
-      markerRadius,
-    );
+    const heroX = originX + (this.scene.heroTileX + 0.5) * scale;
+    const heroY = originY + (this.scene.heroTileY + 0.5) * scale;
+    this.marker.fillCircle(heroX, heroY, markerRadius);
+    this.marker.lineStyle(0.5, 0x000000);
+    this.marker.strokeCircle(heroX, heroY, markerRadius);
   }
 }

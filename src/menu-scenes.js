@@ -142,28 +142,30 @@ class TitleScene extends Phaser.Scene {
       ...option,
       data: GameData.parseDungeonData(this.cache.text.get(option.key)),
     }));
+    const startDungeon = (option, parallelCode = createParallelCode(Number(option.file.match(/\d+/)?.[0]))) => {
+      this.sound.play('se-cursor-enter');
+      this.scene.start('DungeonTestScene', {
+        newRun: true,
+        dungeonDataKey: option.key,
+        dungeonDataFile: option.file,
+        parallelCode,
+      });
+    };
+    this.startDungeon = startDungeon;
+    this.dungeonOptions = dungeonOptions;
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.titleMenuItems = [
       this.createTitleMenuItem(372, dungeonOptions[0].data.dungeonName, () => {
-        this.sound.play('se-cursor-enter');
-        this.scene.start('DungeonTestScene', {
-          newRun: true,
-          dungeonDataKey: dungeonOptions[0].key,
-          dungeonDataFile: dungeonOptions[0].file,
-        });
+        startDungeon(dungeonOptions[0]);
       }, dungeonOptions[0].data.dungeonDescription ?? ''),
       this.createTitleMenuItem(464, dungeonOptions[1].data.dungeonName, () => {
-        this.sound.play('se-cursor-enter');
-        this.scene.start('DungeonTestScene', {
-          newRun: true,
-          dungeonDataKey: dungeonOptions[1].key,
-          dungeonDataFile: dungeonOptions[1].file,
-        });
+        startDungeon(dungeonOptions[1]);
       }, dungeonOptions[1].data.dungeonDescription ?? ''),
       this.createTitleMenuItem(556, 'レシピ図鑑', () => this.openRecipeBook()),
       this.createTitleMenuItem(648, 'オプション', () => this.openOptionsMenu()),
     ];
     this.updateTitleMenuSelection();
+    this.createParallelControls(startDungeon, dungeonOptions);
     this.add.text(GAME_WIDTH / 2, 708, '上下キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
@@ -183,6 +185,9 @@ class TitleScene extends Phaser.Scene {
         }
         return;
       }
+      if (this.parallelCodeInputFocused && this.handleParallelCodeInput(event)) {
+        return;
+      }
       if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
         this.titleSelection = (this.titleSelection + (event.code === 'ArrowUp' ? -1 : 1) + this.titleMenuItems.length)
           % this.titleMenuItems.length;
@@ -197,6 +202,100 @@ class TitleScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown', this.onTitleKeyDown);
     });
+  }
+
+  createParallelControls(startDungeon, dungeonOptions) {
+    const x = 184;
+    this.parallelCodeInputValue = '';
+    this.parallelCodeInputFocused = false;
+    this.add.text(x, 548, 'パラレルプレイコード', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '18px',
+      color: '#f3f1e8',
+    }).setOrigin(0.5);
+    this.parallelCodeInputBackground = this.add.rectangle(x, 590, 320, 42, 0x182831)
+      .setStrokeStyle(2, 0x6e8996)
+      .setInteractive({ useHandCursor: true });
+    this.parallelCodeInputText = this.add.text(x - 148, 590, '例: 1A2B3C4D', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '20px',
+      color: '#9ab5c7',
+    }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+    this.parallelStartBackground = this.add.rectangle(x, 642, 320, 42, 0x384d58)
+      .setStrokeStyle(2, 0x6e8996)
+      .setInteractive({ useHandCursor: true });
+    this.parallelStartText = this.add.text(x, 642, 'パラレルスタート', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '20px',
+      color: '#f3f1e8',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.parallelCodeMessage = this.add.text(x, 676, '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '14px',
+      color: '#df5b62',
+      align: 'center',
+      wordWrap: { width: 320 },
+    }).setOrigin(0.5, 0);
+    const focusInput = () => {
+      if (this.isTitleWindowOpen()) {
+        return;
+      }
+      this.parallelCodeInputFocused = true;
+      this.updateParallelCodeInput();
+    };
+    this.parallelCodeInputBackground.on('pointerdown', focusInput);
+    this.parallelCodeInputText.on('pointerdown', focusInput);
+    const start = () => this.startParallelPlay(startDungeon, dungeonOptions);
+    this.parallelStartBackground.on('pointerdown', start);
+    this.parallelStartText.on('pointerdown', start);
+    this.parallelStartBackground.on('pointerover', () => this.parallelStartBackground.setStrokeStyle(2, 0xffdc4a));
+    this.parallelStartBackground.on('pointerout', () => this.parallelStartBackground.setStrokeStyle(2, 0x6e8996));
+  }
+
+  handleParallelCodeInput(event) {
+    if (event.code === 'Escape') {
+      this.parallelCodeInputFocused = false;
+    } else if (event.code === 'Backspace') {
+      this.parallelCodeInputValue = this.parallelCodeInputValue.slice(0, -1);
+    } else if (event.code === 'Enter') {
+      this.startParallelPlay(this.startDungeon, this.dungeonOptions);
+      return true;
+    } else if (/^[0-9A-F]$/i.test(event.key) && this.parallelCodeInputValue.length < 8) {
+      this.parallelCodeInputValue += event.key.toUpperCase();
+    } else {
+      return false;
+    }
+    this.parallelCodeMessage.setText('');
+    this.updateParallelCodeInput();
+    return true;
+  }
+
+  updateParallelCodeInput() {
+    const hasValue = this.parallelCodeInputValue.length > 0;
+    this.parallelCodeInputText.setText(hasValue ? this.parallelCodeInputValue : '例: 1A2B3C4D');
+    this.parallelCodeInputText.setColor(hasValue ? '#f3f1e8' : '#9ab5c7');
+    this.parallelCodeInputBackground.setStrokeStyle(2, this.parallelCodeInputFocused ? 0xffdc4a : 0x6e8996);
+  }
+
+  startParallelPlay(startDungeon, dungeonOptions) {
+    if (this.isTitleWindowOpen()) {
+      return;
+    }
+    const parallelRun = parseParallelCode(this.parallelCodeInputValue);
+    if (!parallelRun) {
+      this.parallelCodeMessage.setText('1または2で始まる8桁の16進数を入力してください。');
+      return;
+    }
+    const option = dungeonOptions.find((candidate) => candidate.key === parallelRun.dungeonDataKey);
+    if (!option) {
+      this.parallelCodeMessage.setText('対応していないダンジョンです。');
+      return;
+    }
+    startDungeon(option, parallelRun.code);
+  }
+
+  isTitleWindowOpen() {
+    return this.optionWindowVisible || this.recipeBook?.container.visible;
   }
 
   createTitleMenuItem(y, label, action, subtitle = '') {
