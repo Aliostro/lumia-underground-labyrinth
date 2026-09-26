@@ -103,6 +103,7 @@ const InventoryUiBehavior = {
     }
     this.inventoryTitleText.setText(this.inventoryPage === 2 ? '足下アイテム' : '持ち物');
     this.inventoryPageText.setText(`${this.inventoryPage + 1} / ${pageCount}`);
+    const registeredRecipeIds = RecipeBook.getRegisteredIds();
     this.inventoryItemTexts.forEach((text, row) => {
       const index = this.inventoryPage * 10 + row;
       const x = slotStartX;
@@ -133,7 +134,12 @@ const InventoryUiBehavior = {
       const recipeName = recipeResultDefinition
         ? `${recipeNamePrefix}　　のレシピ`
         : definition?.name ?? '';
-      const itemName = item?.equipped != null ? `[装備中] ${recipeName}${useCount}` : `${recipeName}${useCount}`;
+      const registeredRecipeLabel = definition?.category === 80 && registeredRecipeIds.has(definition.id)
+        ? '（登録済）'
+        : '';
+      const itemName = item?.equipped != null
+        ? `[装備中] ${recipeName}${registeredRecipeLabel}${useCount}`
+        : `${recipeName}${registeredRecipeLabel}${useCount}`;
       const disabledLabel = craftingMaterial ? '[選択済み]' : craftingUnavailable ? '[製作不可]' : '';
       const recipePrefixWidth = recipeResultDefinition ? text.setText(recipeNamePrefix).width : 0;
       text.setPosition(x + 48, y + 7).setText(disabled ? `${itemName} ${disabledLabel}` : itemName);

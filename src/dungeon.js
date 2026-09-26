@@ -87,9 +87,15 @@ class DungeonGenerator {
 
   carveCorridor(tiles, fromRoom, toRoom) {
     const horizontalFirst = this.random() < 0.5;
-    const pathOptions = [horizontalFirst, !horizontalFirst].map((isHorizontalFirst) => (
+    const directPaths = [horizontalFirst, !horizontalFirst].map((isHorizontalFirst) => (
       this.createCorridorPath(fromRoom, toRoom, isHorizontalFirst)
     ));
+    const windingPaths = [horizontalFirst, !horizontalFirst]
+      .map((isHorizontalFirst) => this.createWindingCorridorPath(fromRoom, toRoom, isHorizontalFirst))
+      .filter(Boolean);
+    const pathOptions = this.random() < 0.75
+      ? [...windingPaths, ...directPaths]
+      : [...directPaths, ...windingPaths];
     const path = pathOptions.find((option) => this.canCarveCorridor(tiles, option));
 
     if (!path) {
@@ -110,6 +116,33 @@ class DungeonGenerator {
     return [
       ...this.createLine(fromRoom.centerX, fromRoom.centerY, corner.x, corner.y),
       ...this.createLine(corner.x, corner.y, toRoom.centerX, toRoom.centerY).slice(1),
+    ];
+  }
+
+  createWindingCorridorPath(fromRoom, toRoom, isHorizontalFirst) {
+    const startX = fromRoom.centerX;
+    const startY = fromRoom.centerY;
+    const endX = toRoom.centerX;
+    const endY = toRoom.centerY;
+    if (isHorizontalFirst) {
+      if (Math.abs(endX - startX) < 3) {
+        return null;
+      }
+      const bendX = this.randomInt(Math.min(startX, endX) + 1, Math.max(startX, endX) - 1);
+      return [
+        ...this.createLine(startX, startY, bendX, startY),
+        ...this.createLine(bendX, startY, bendX, endY).slice(1),
+        ...this.createLine(bendX, endY, endX, endY).slice(1),
+      ];
+    }
+    if (Math.abs(endY - startY) < 3) {
+      return null;
+    }
+    const bendY = this.randomInt(Math.min(startY, endY) + 1, Math.max(startY, endY) - 1);
+    return [
+      ...this.createLine(startX, startY, startX, bendY),
+      ...this.createLine(startX, bendY, endX, bendY).slice(1),
+      ...this.createLine(endX, bendY, endX, endY).slice(1),
     ];
   }
 

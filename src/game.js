@@ -502,9 +502,12 @@ class DungeonTestScene extends Phaser.Scene {
     if (!floorItems.recipeDropEnabled) {
       return;
     }
+    const registeredRecipeIds = RecipeBook.getRegisteredIds();
     const recipeItemIds = [...this.itemDefinitions.values()]
       .filter((definition) => definition.category === 80)
       .map((definition) => definition.id);
+    const unregisteredRecipeItemIds = recipeItemIds.filter((id) => !registeredRecipeIds.has(id));
+    const registeredRecipeItemIds = recipeItemIds.filter((id) => registeredRecipeIds.has(id));
     const recipeItemCount = Phaser.Math.Between(
       floorItems.minimumRecipeItems,
       floorItems.maximumRecipeItems,
@@ -514,7 +517,16 @@ class DungeonTestScene extends Phaser.Scene {
       if (!position || recipeItemIds.length === 0) {
         return;
       }
-      this.placeFloorItem({ id: Phaser.Utils.Array.GetRandom(recipeItemIds) }, position.x, position.y);
+      const preferredRecipeItemIds = Math.random() < 0.7
+        ? unregisteredRecipeItemIds
+        : registeredRecipeItemIds;
+      const fallbackRecipeItemIds = preferredRecipeItemIds === unregisteredRecipeItemIds
+        ? registeredRecipeItemIds
+        : unregisteredRecipeItemIds;
+      const recipeItemId = Phaser.Utils.Array.GetRandom(preferredRecipeItemIds.length > 0
+        ? preferredRecipeItemIds
+        : fallbackRecipeItemIds);
+      this.placeFloorItem({ id: recipeItemId }, position.x, position.y);
     }
   }
 
@@ -1071,6 +1083,7 @@ class DungeonTestScene extends Phaser.Scene {
         || definition.useEffectId === ITEM_EFFECT_VOLTICLET
         || definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP
         || definition.useEffectId === ITEM_EFFECT_SLOW_POWDER
+        || definition.useEffectId === ITEM_EFFECT_THE_MOON
       )
     ) {
       this.pendingThrow = {
@@ -1081,6 +1094,7 @@ class DungeonTestScene extends Phaser.Scene {
         volticlet: definition.useEffectId === ITEM_EFFECT_VOLTICLET,
         directionalWarp: definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP,
         slowPowder: definition.useEffectId === ITEM_EFFECT_SLOW_POWDER,
+        theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
       };
       this.inventoryUi.setVisible(false);
       this.closeInventoryMenu();
@@ -1350,6 +1364,7 @@ class DungeonTestScene extends Phaser.Scene {
       volticlet,
       directionalWarp,
       slowPowder,
+      theMoon,
     } = this.pendingThrow;
     this.pendingThrow = null;
     if (fromFloor ? this.getFloorItemAt(this.heroTileX, this.heroTileY) !== item : !this.playerStatus.inventory.includes(item)) {
@@ -1358,6 +1373,11 @@ class DungeonTestScene extends Phaser.Scene {
     if (directionalWarp) {
       this.playSfx('se-use');
       this.useDirectionalWarp(item, definition, direction);
+      return;
+    }
+    if (theMoon) {
+      this.playSfx('se-use');
+      this.useTheMoon(item, definition, direction);
       return;
     }
     if (sleepGas || volticlet || slowPowder) {
@@ -1558,6 +1578,35 @@ class DungeonTestScene extends Phaser.Scene {
     return destination;
   }
 
+  useTheMoon(item, definition, direction) {
+    const destroyedWalls = [];
+    for (let distance = 1; distance <= 10; distance += 1) {
+      const tileX = this.heroTileX + direction.x * distance;
+      const tileY = this.heroTileY + direction.y * distance;
+      if (this.dungeonTiles[tileY]?.[tileX] === 0) {
+        this.dungeonTiles[tileY][tileX] = CORRIDOR_TILE;
+        destroyedWalls.push({ x: tileX, y: tileY });
+      }
+    }
+    if (destroyedWalls.length > 0) {
+      this.playSfx('se-kabehori');
+      this.dungeonRenderer.refreshTiles(destroyedWalls);
+      this.corridorTiles = this.getCorridorTiles();
+      this.minimapUi.refreshTiles(destroyedWalls);
+      this.updateVisibility();
+    }
+    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: '使った' });
+    if (this.consumeDeviceUse(item)) {
+      this.removeInventoryOrFloorItem(item);
+    }
+    this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
+    this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
+    this.updateStatusUi();
+    this.refreshInventoryUi();
+    this.drawMinimapMarker();
+    this.consumeItemTurn();
+  }
+
   applyVolticlet(direction, definition) {
     const targets = [];
     for (let distance = 1; distance <= 10; distance += 1) {
@@ -1688,6 +1737,7 @@ class DungeonTestScene extends Phaser.Scene {
           definition.useEffectId === ITEM_EFFECT_SLEEP_GAS
           || definition.useEffectId === ITEM_EFFECT_VOLTICLET
           || definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP
+          || definition.useEffectId === ITEM_EFFECT_THE_MOON
         )
       )
     ) {
@@ -1698,6 +1748,7 @@ class DungeonTestScene extends Phaser.Scene {
         sleepGas: definition.useEffectId === ITEM_EFFECT_SLEEP_GAS,
         volticlet: definition.useEffectId === ITEM_EFFECT_VOLTICLET,
         directionalWarp: definition.useEffectId === ITEM_EFFECT_DIRECTIONAL_WARP,
+        theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
       };
       this.throwPendingItem(Phaser.Utils.Array.GetRandom(MOVE_DIRECTIONS));
       return;
@@ -2183,6 +2234,9 @@ class DungeonTestScene extends Phaser.Scene {
     }
     const actualDamage = Math.min(this.playerStatus.hitPoints, damage);
     this.playerStatus.hitPoints = Math.max(0, this.playerStatus.hitPoints - damage);
+    if (actualDamage > 0) {
+      this.dashDirection = null;
+    }
     if (actualDamage > 0 && this.playerStatus.paralysisTurns > 0) {
       this.playerStatus.paralysisTurns = 0;
       this.heroParalysisText.setVisible(false);
@@ -2676,9 +2730,14 @@ class DungeonTestScene extends Phaser.Scene {
       this.hero.setScale(HERO_SCALE);
       const playerAttacks = [this.playerAttack(enemy)];
       if (
-        this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK)
+        (
+          this.hasEquipEffect(ITEM_EQUIP_EFFECT_ALWAYS_DOUBLE_ATTACK)
+          || (
+            this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK)
+            && Math.random() < WINDRUNNER_DOUBLE_ATTACK_CHANCE
+          )
+        )
         && enemy.hitPoints > 0
-        && Math.random() < WINDRUNNER_DOUBLE_ATTACK_CHANCE
       ) {
         playerAttacks.push(this.playerAttack(enemy));
       }
@@ -3352,7 +3411,7 @@ class DungeonTestScene extends Phaser.Scene {
       targets.push({ tileX: this.heroTileX, tileY: this.heroTileY });
     }
     this.enemies.forEach((target) => {
-      if (!settings.isTargetInRange(target)) {
+      if (target.status != null || !settings.isTargetInRange(target)) {
         return;
       }
       target.peaceTurns = PEACE_TURN_COUNT;
@@ -4006,7 +4065,7 @@ class DungeonTestScene extends Phaser.Scene {
     const attacks = [];
     for (let attack = 0; attack < attackCount; attack += 1) {
       const hit = this.isAttackHit(NORMAL_ATTACK_ACCURACY);
-      attacks.push({
+      const attackData = {
         sprite: enemy.sprite,
         symbolOutline: enemy.symbolOutline,
         symbol: enemy.symbol,
@@ -4057,15 +4116,56 @@ class DungeonTestScene extends Phaser.Scene {
                 });
               }
             }
+            const reflectedDamage = this.hasEquipEffect(ITEM_EQUIP_EFFECT_DAMAGE_REFLECTION)
+              ? Math.floor(actualDamage * 0.3)
+              : 0;
             this.dashDirection = null;
             this.updateStatusUi();
-            this.actionLog.add('ENEMY_ATTACK', { enemy: this.getEnemyLogName(enemy), damage: actualDamage });
+            attackData.onComplete = () => {
+              this.actionLog.add('ENEMY_ATTACK', { enemy: this.getEnemyLogName(enemy), damage: actualDamage });
+              if (reflectedDamage <= 0) {
+                return;
+              }
+              this.applyEnemyDamage(enemy, reflectedDamage);
+              this.actionLog.add('ITEM_DAMAGE_REFLECTION', {
+                enemy: this.getEnemyLogName(enemy),
+                damage: reflectedDamage,
+              });
+              if (enemy.hitPoints > 0 || this.applyEnemySurvivalAbility(enemy)) {
+                return;
+              }
+              this.applyEnemyDefeatDrop(enemy);
+              this.dropEnemyHeldItem(enemy);
+              const levelsGained = this.playerStatus.gainExperience(enemy.experience);
+              this.updateStatusUi();
+              this.actionLog.add('ENEMY_DEFEATED', {
+                enemy: this.getEnemyLogName(enemy),
+                experience: enemy.experience,
+              });
+              levelsGained.forEach((level) => {
+                this.playSfx('se-level-up');
+                this.actionLog.add('LEVEL_UP', { level });
+              });
+              attackData.postAttackMovement = null;
+              this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
+              enemy.sprite.destroy();
+              enemy.symbolOutline?.destroy();
+              enemy.symbol?.destroy();
+              enemy.jackieLevelText?.destroy();
+              enemy.sleepText.destroy();
+              enemy.confusionText.destroy();
+              enemy.peaceText?.destroy();
+              enemy.hasteText.destroy();
+              enemy.slowText.destroy();
+              enemy.paralysisText.destroy();
+            };
           } else {
             this.playSfx('se-miss');
             this.actionLog.add('ENEMY_MISS', { enemy: this.getEnemyLogName(enemy) });
           }
         },
-      });
+      };
+      attacks.push(attackData);
     }
     return attacks;
   }
@@ -5397,6 +5497,7 @@ class DungeonTestScene extends Phaser.Scene {
       return false;
     }
     item.id = FLOWER_ITEM_ID;
+    delete item.usesRemaining;
     item.marker.setTexture('item-icon-flower').setTint(0xffffff);
     this.playEnemyAlertSfx();
     this.actionLog.add('ENEMY_PRIYA_SINGS', { enemy: this.getEnemyLogName(enemy) });

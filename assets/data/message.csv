@@ -6,6 +6,7 @@
 "PLAYER_RANGED_NOTHING_HIT","何にも当たらなかった！"
 "PLAYER_DEFEATED","アレックスは倒れた！"
 "ENEMY_ATTACK","{enemy}から{damage}ダメージを受けた。"
+"ITEM_DAMAGE_REFLECTION","カラペースタクルで{enemy}に{damage}ダメージを反射した。"
 "ENEMY_ATTACK_ENEMY","{enemy}は混乱して{target}に{damage}ダメージを与えた。"
 "ENEMY_JACKIE_ATTACK_ENEMY","{enemy}は{target}に{damage}ダメージを与えた。"
 "ENEMY_JACKIE_ADRENALINE","{enemy}はアドレナリンを出している！"

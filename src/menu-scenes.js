@@ -200,9 +200,15 @@ class TitleScene extends Phaser.Scene {
     background.on('pointerover', selectItem);
     text.on('pointerover', selectItem);
     subtitleText?.on('pointerover', selectItem);
-    background.on('pointerdown', action);
-    text.on('pointerdown', action);
-    subtitleText?.on('pointerdown', action);
+    const handlePointerDown = () => {
+      if (this.optionWindowVisible || this.recipeBook.container.visible) {
+        return;
+      }
+      action();
+    };
+    background.on('pointerdown', handlePointerDown);
+    text.on('pointerdown', handlePointerDown);
+    subtitleText?.on('pointerdown', handlePointerDown);
     return { background, text, subtitleText, action };
   }
 
