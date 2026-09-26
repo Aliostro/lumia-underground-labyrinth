@@ -1124,6 +1124,9 @@ class DungeonTestScene extends Phaser.Scene {
       const recoveredHunger = this.playerStatus.hunger - hungerBefore;
       this.actionLog.add(action === '食べる' ? 'ITEM_ATE' : 'ITEM_USED', { item: definition.name });
       this.applyItemUseEffect(definition, wasAtMaximumHitPoints, wasAtMaximumHunger);
+      if (this.playerStatus.hunger > hungerBefore) {
+        this.playerStatus.stepsSinceHungerLoss = 0;
+      }
       if (definition.category !== 50 || this.consumeDeviceUse(item)) {
         this.removeInventoryOrFloorItem(item);
       }
