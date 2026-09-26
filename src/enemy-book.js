@@ -33,10 +33,10 @@ class EnemyBook {
     return true;
   }
 
-  constructor(scene, enemyDefinitions, enemySkillDefinitions, depth = STAIR_MENU_DEPTH + 10) {
+  constructor(scene, enemyDefinitions, enemyBookDescriptions, depth = STAIR_MENU_DEPTH + 10) {
     this.scene = scene;
     this.enemyDefinitions = enemyDefinitions;
-    this.enemySkillDefinitions = enemySkillDefinitions;
+    this.enemyBookDescriptions = enemyBookDescriptions;
     this.selectedIndex = 0;
     this.page = 0;
     this.rowsPerPage = 12;
@@ -155,26 +155,13 @@ class EnemyBook {
   }
 
   getStatusText(enemy) {
-    const skill = enemy.specialAbilityId === null ? null : this.enemySkillDefinitions.get(enemy.specialAbilityId);
+    const description = enemy.specialAbilityId === null
+      ? ''
+      : this.enemyBookDescriptions.get(enemy.specialAbilityId)?.description ?? '';
     return [
       `HP: ${enemy.hitPoints}    攻撃力: ${enemy.attack}    防御力: ${enemy.defense}`,
       `経験値: ${enemy.experience}    移動回数: ${enemy.movementCount}    攻撃回数: ${enemy.attackCount}`,
-      `特殊能力: ${this.getSkillDescription(skill?.description) || 'なし'}`,
+      `特殊能力: ${description || 'なし'}`,
     ].join('\n');
-  }
-
-  getSkillDescription(description = '') {
-    let quoteDepth = 0;
-    return [...description].filter((character) => {
-      if (character === '「') {
-        quoteDepth += 1;
-        return false;
-      }
-      if (character === '」' && quoteDepth > 0) {
-        quoteDepth -= 1;
-        return false;
-      }
-      return quoteDepth === 0;
-    }).join('').trim();
   }
 }

@@ -37,6 +37,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('WanaMine', 'assets/image/WanaMine.png');
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
+    this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
     if (!this.cache.text.has(this.dungeonDataKey)) {
       this.load.text(this.dungeonDataKey, `assets/data/${this.dungeonDataFile}?v=${Date.now()}`);
     }
@@ -123,6 +124,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.pendingCraftItem = null;
     this.enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'));
     this.enemySkillDefinitions = GameData.parseEnemySkillData(this.cache.text.get('enemy-skill-data'));
+    this.enemyBookDescriptions = GameData.parseEnemyBookDescriptionData(this.cache.text.get('enemy-book-description-data'));
     this.itemEquipEffectDefinitions = GameData.parseItemEquipEffectData(this.cache.text.get('item-equip-effect-data'));
     this.itemEffectDefinitions = GameData.parseItemEffectData(this.cache.text.get('item-effect-data'));
     this.craftDefinitions = GameData.parseCraftData(this.cache.text.get('craft-data'));
@@ -268,7 +270,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.createInventoryUi();
     this.createStairMenuUi();
     this.recipeBook = new RecipeBook(this, this.itemDefinitions);
-    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemySkillDefinitions);
+    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions);
     this.actionLog = new ActionLog(this, this.messageData, () => this.floorTurn);
     this.messageLogScrollDirection = 0;
     this.messageLogScrollNextAt = 0;

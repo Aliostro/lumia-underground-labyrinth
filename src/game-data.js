@@ -28,6 +28,14 @@ class GameData {
     }));
   }
 
+  static parseEnemyBookDescriptionData(csv) {
+    const lines = csv.trim().split(/\r?\n/).slice(1);
+    return new Map(lines.map((line) => {
+      const fields = line.match(/"([^"]*)"/g).map((field) => field.slice(1, -1));
+      return [Number(fields[0]), { id: Number(fields[0]), description: fields[1] }];
+    }));
+  }
+
   static parseItemEffectData(csv) {
     const lines = csv.trim().split(/\r?\n/).slice(1);
     return new Map(lines.map((line) => {

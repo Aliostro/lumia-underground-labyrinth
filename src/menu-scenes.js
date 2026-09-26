@@ -151,6 +151,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('item-data', 'assets/data/item.csv');
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
+    this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
     EnemyBook.SYMBOL_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
@@ -187,7 +188,7 @@ class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
     this.enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'));
-    this.enemySkillDefinitions = GameData.parseEnemySkillData(this.cache.text.get('enemy-skill-data'));
+    this.enemyBookDescriptions = GameData.parseEnemyBookDescriptionData(this.cache.text.get('enemy-book-description-data'));
     const dungeonOptions = [
       { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
@@ -231,7 +232,7 @@ class TitleScene extends Phaser.Scene {
       });
     };
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
-    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemySkillDefinitions, 20);
+    this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions, 20);
     const mainMenuItems = [
       this.createTitleMenuItem(GAME_WIDTH / 2, 372, dungeonOptions[0].data.dungeonName, () => {
         startDungeon(dungeonOptions[0]);
