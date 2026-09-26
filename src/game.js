@@ -3175,7 +3175,7 @@ class DungeonTestScene extends Phaser.Scene {
     const charlottes = this.enemies.filter((enemy) => (
       CHARLOTTE_HEAL_SKILL_IDS.includes(enemy.specialAbilityId)
       && enemy.status == null
-      && enemy.charlotteHealCooldown <= 0
+      && (enemy.charlotteHealCooldown ?? 0) <= 0
     ));
     const charlotte = Phaser.Utils.Array.GetRandom(charlottes);
     if (!charlotte) {
@@ -3212,12 +3212,33 @@ class DungeonTestScene extends Phaser.Scene {
     charlotte.charlotteHealCooldown = 5;
     this.charlotteHealUsedThisTurn = true;
     this.playEnemyWarpSfx();
+    this.playSfx('se-magic');
+    this.playCharlotteHealEffect(damagedEnemy.tileX, damagedEnemy.tileY);
     this.actionLog.add('ENEMY_CHARLOTTE_HEALS', {
       enemy: this.getEnemyLogName(charlotte),
       target: this.getEnemyLogName(damagedEnemy),
       amount: recoveredHitPoints,
     });
     return true;
+  }
+
+  playCharlotteHealEffect(tileX, tileY) {
+    const effect = this.add.graphics().setDepth(FOG_DEPTH - 1);
+    effect.fillStyle(0x72f27a, 0.32);
+    effect.fillCircle(0, 0, TILE_SIZE * 0.28);
+    effect.lineStyle(4, 0xbdfcc2, 0.95);
+    effect.strokeCircle(0, 0, TILE_SIZE * 0.25);
+    effect.lineStyle(2, 0xf3fff0, 0.9);
+    effect.strokeCircle(0, 0, TILE_SIZE * 0.13);
+    effect.setPosition((tileX + 0.5) * TILE_SIZE, (tileY + 0.5) * TILE_SIZE).setScale(0.25);
+    this.tweens.add({
+      targets: effect,
+      scale: 1.65,
+      alpha: 0,
+      duration: 440,
+      ease: 'Sine.easeOut',
+      onComplete: () => effect.destroy(),
+    });
   }
 
   resolveEnemyTurn() {
@@ -5914,7 +5935,7 @@ const config = {
   backgroundColor: '#000000',
   scale: {
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
+    autoCenter: Phaser.Scale.NO_CENTER,
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
   },

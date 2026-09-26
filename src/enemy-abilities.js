@@ -12,8 +12,28 @@ const EnemyAbilities = {
     this.playerStatus.sleepTurns = 0;
     this.heroSleepText.setVisible(false);
     this.enemies.forEach((target) => this.wakeEnemy(target));
+    this.playSfx('se-wind');
+    this.playYuminWakeAllEffect();
     this.actionLog.add('ENEMY_YUMIN_WAKES_ALL');
     return true;
+  },
+
+  playYuminWakeAllEffect() {
+    Array.from({ length: 14 }, (_, index) => {
+      const effect = this.add.graphics().setScrollFactor(0).setDepth(200);
+      effect.lineStyle(index % 3 === 0 ? 4 : 2, 0xc5f6ff, 0.75);
+      effect.lineBetween(-90, 0, 105, Phaser.Math.Between(-12, 12));
+      effect.setPosition(-120, Phaser.Math.Between(36, GAME_HEIGHT - 36));
+      this.tweens.add({
+        targets: effect,
+        x: GAME_WIDTH + 120,
+        alpha: 0,
+        duration: Phaser.Math.Between(480, 720),
+        delay: index * 28,
+        ease: 'Sine.easeOut',
+        onComplete: () => effect.destroy(),
+      });
+    });
   },
 
   useLenoreConfusion(enemy, attacks) {
