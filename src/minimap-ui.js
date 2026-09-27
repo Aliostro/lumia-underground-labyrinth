@@ -91,13 +91,13 @@ class MinimapUi {
       this.marker.strokeCircle(stairsX, stairsY, markerRadius);
     }
     const enemyLocationRevealed = detectsAllEnemies || this.scene.monsterHouseAnnounced;
-    if (this.scene.rumi && (enemyLocationRevealed || this.scene.rumi.sprite.visible)) {
-      const rumiX = originX + (this.scene.rumi.tileX + 0.5) * scale;
-      const rumiY = originY + (this.scene.rumi.tileY + 0.5) * scale;
+    if (this.scene.lumi && (enemyLocationRevealed || this.scene.lumi.sprite.visible)) {
+      const lumiX = originX + (this.scene.lumi.tileX + 0.5) * scale;
+      const lumiY = originY + (this.scene.lumi.tileY + 0.5) * scale;
       this.marker.fillStyle(0x68d5ff);
-      this.marker.fillCircle(rumiX, rumiY, markerRadius);
+      this.marker.fillCircle(lumiX, lumiY, markerRadius);
       this.marker.lineStyle(0.5, 0x000000);
-      this.marker.strokeCircle(rumiX, rumiY, markerRadius);
+      this.marker.strokeCircle(lumiX, lumiY, markerRadius);
     }
     this.scene.enemies.forEach((enemy) => {
       const enemyLocationRevealed = detectsAllEnemies || this.scene.monsterHouseAnnounced;

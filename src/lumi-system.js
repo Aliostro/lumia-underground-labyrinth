@@ -1,5 +1,5 @@
-const RumiSystem = {
-  createRumiExchangeUi() {
+const LumiSystem = {
+  createLumiExchangeUi() {
     const width = 640;
     const height = 520;
     const x = (GAME_WIDTH - width) / 2;
@@ -9,7 +9,7 @@ const RumiSystem = {
     background.fillRoundedRect(x, y, width, height, 8);
     background.lineStyle(2, 0x76d7ea, 1);
     background.strokeRoundedRect(x, y, width, height, 8);
-    const title = this.add.text(x + 28, y + 22, 'RUMI', {
+    const title = this.add.text(x + 28, y + 22, 'LUMI', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '28px',
       color: '#76d7ea',
@@ -34,28 +34,28 @@ const RumiSystem = {
       fontSize: '16px',
       color: '#9ab5c7',
     });
-    this.rumiExchangeUi = this.add.container(0, 0, [background, title, prompt, pageIndicator, ...rows, hint])
+    this.lumiExchangeUi = this.add.container(0, 0, [background, title, prompt, pageIndicator, ...rows, hint])
       .setScrollFactor(0)
       .setDepth(INVENTORY_DEPTH + 2)
       .setVisible(false);
-    this.rumiExchangeRows = rows;
-    this.rumiExchangePrompt = prompt;
-    this.rumiExchangePageIndicator = pageIndicator;
-    this.rumiExchange = null;
+    this.lumiExchangeRows = rows;
+    this.lumiExchangePrompt = prompt;
+    this.lumiExchangePageIndicator = pageIndicator;
+    this.lumiExchange = null;
   },
 
-  isRumiAt(tileX, tileY) {
-    return this.rumi?.tileX === tileX && this.rumi?.tileY === tileY;
+  isLumiAt(tileX, tileY) {
+    return this.lumi?.tileX === tileX && this.lumi?.tileY === tileY;
   },
 
-  updateRumiVisibility(visibleTiles) {
-    if (!this.rumi) {
+  updateLumiVisibility(visibleTiles) {
+    if (!this.lumi) {
       return;
     }
-    this.rumi.sprite.setVisible(visibleTiles.has(`${this.rumi.tileX},${this.rumi.tileY}`));
+    this.lumi.sprite.setVisible(visibleTiles.has(`${this.lumi.tileX},${this.lumi.tileY}`));
   },
 
-  isRumiPatrolTile(tileX, tileY, room) {
+  isLumiPatrolTile(tileX, tileY, room) {
     return this.getRoomAt(tileX, tileY) === room
       && this.dungeonTiles[tileY]?.[tileX] === FLOOR_TILE
       && ![
@@ -65,68 +65,68 @@ const RumiSystem = {
       ));
   },
 
-  resolveRumiTurn() {
-    if (!this.rumi) {
+  resolveLumiTurn() {
+    if (!this.lumi) {
       return null;
     }
-    const room = this.getRoomAt(this.rumi.tileX, this.rumi.tileY);
+    const room = this.getRoomAt(this.lumi.tileX, this.lumi.tileY);
     if (!room) {
       return null;
     }
     const directions = Phaser.Utils.Array.Shuffle([...MOVE_DIRECTIONS]);
     const direction = directions.find((candidate) => (
-      this.isRumiPatrolTile(this.rumi.tileX + candidate.x, this.rumi.tileY + candidate.y, room)
-      && !this.isTileOccupied(this.rumi.tileX + candidate.x, this.rumi.tileY + candidate.y)
+      this.isLumiPatrolTile(this.lumi.tileX + candidate.x, this.lumi.tileY + candidate.y, room)
+      && !this.isTileOccupied(this.lumi.tileX + candidate.x, this.lumi.tileY + candidate.y)
     ));
-    return direction ? this.resolveEnemyMoveInDirection(this.rumi, direction) : null;
+    return direction ? this.resolveEnemyMoveInDirection(this.lumi, direction) : null;
   },
 
-  startRumiExchange() {
-    const offerItemIds = this.getRumiOfferItemIds();
+  startLumiExchange() {
+    const offerItemIds = this.getLumiOfferItemIds();
     const materialItems = this.playerStatus.inventory.filter((item) => (
       this.itemDefinitions.get(item.id)?.category === 90
     ));
     if (materialItems.length === 0) {
-      this.actionLog.add('RUMI_NEEDS_MATERIAL');
+      this.actionLog.add('LUMI_NEEDS_MATERIAL');
       return;
     }
     if (offerItemIds.length === 0) {
-      this.actionLog.add('RUMI_SAD');
+      this.actionLog.add('LUMI_SAD');
       return;
     }
-    this.rumiExchange = {
+    this.lumiExchange = {
       phase: 'offer',
       offerItemIds,
       materialItems,
       selectedIndex: 0,
       offeredItemId: null,
     };
-    this.refreshRumiExchangeUi();
-    this.rumiExchangeUi.setVisible(true);
+    this.refreshLumiExchangeUi();
+    this.lumiExchangeUi.setVisible(true);
   },
 
-  getRumiOfferItemIds() {
+  getLumiOfferItemIds() {
     const itemEntries = this.dungeonData.itemMap.get(this.playerStatus.floor)?.entries ?? [];
     return [...new Set(itemEntries
       .map((entry) => entry.id)
       .filter((itemId) => this.itemDefinitions.get(itemId)?.category === 90))];
   },
 
-  refreshRumiExchangeUi() {
-    const exchange = this.rumiExchange;
+  refreshLumiExchangeUi() {
+    const exchange = this.lumiExchange;
     if (!exchange) {
       return;
     }
     const choices = exchange.phase === 'offer' ? exchange.offerItemIds : exchange.materialItems;
-    const page = Math.floor(exchange.selectedIndex / this.rumiExchangeRows.length);
-    const pageCount = Math.ceil(choices.length / this.rumiExchangeRows.length);
-    const firstIndex = page * this.rumiExchangeRows.length;
+    const page = Math.floor(exchange.selectedIndex / this.lumiExchangeRows.length);
+    const pageCount = Math.ceil(choices.length / this.lumiExchangeRows.length);
+    const firstIndex = page * this.lumiExchangeRows.length;
     const selectedDefinition = exchange.offeredItemId && this.itemDefinitions.get(exchange.offeredItemId);
-    this.rumiExchangePrompt.setText(exchange.phase === 'offer'
+    this.lumiExchangePrompt.setText(exchange.phase === 'offer'
       ? '交換で受け取る素材を選んでください。'
       : `${selectedDefinition?.name ?? '素材'} と交換する手持ち素材を選んでください。`);
-    this.rumiExchangePageIndicator.setText(pageCount > 1 ? `ページ ${page + 1}/${pageCount}` : '');
-    this.rumiExchangeRows.forEach((row, index) => {
+    this.lumiExchangePageIndicator.setText(pageCount > 1 ? `ページ ${page + 1}/${pageCount}` : '');
+    this.lumiExchangeRows.forEach((row, index) => {
       const choiceIndex = firstIndex + index;
       const choice = choices[choiceIndex];
       const definition = this.itemDefinitions.get(exchange.phase === 'offer' ? choice : choice?.id);
@@ -135,37 +135,37 @@ const RumiSystem = {
     });
   },
 
-  handleRumiExchangeInput(event) {
-    const exchange = this.rumiExchange;
+  handleLumiExchangeInput(event) {
+    const exchange = this.lumiExchange;
     if (!exchange) {
       return false;
     }
     const choices = exchange.phase === 'offer' ? exchange.offerItemIds : exchange.materialItems;
     if (event.code === 'ArrowUp' || event.code === 'ArrowDown') {
-      const currentPage = Math.floor(exchange.selectedIndex / this.rumiExchangeRows.length);
-      const firstIndex = currentPage * this.rumiExchangeRows.length;
-      const lastIndex = Math.min(firstIndex + this.rumiExchangeRows.length - 1, choices.length - 1);
+      const currentPage = Math.floor(exchange.selectedIndex / this.lumiExchangeRows.length);
+      const firstIndex = currentPage * this.lumiExchangeRows.length;
+      const lastIndex = Math.min(firstIndex + this.lumiExchangeRows.length - 1, choices.length - 1);
       exchange.selectedIndex = event.code === 'ArrowUp'
         ? (exchange.selectedIndex === firstIndex ? lastIndex : exchange.selectedIndex - 1)
         : (exchange.selectedIndex === lastIndex ? firstIndex : exchange.selectedIndex + 1);
       this.playSfx('se-cursor-move');
-      this.refreshRumiExchangeUi();
+      this.refreshLumiExchangeUi();
       return true;
     }
-    if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && choices.length > this.rumiExchangeRows.length) {
-      const pageCount = Math.ceil(choices.length / this.rumiExchangeRows.length);
+    if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && choices.length > this.lumiExchangeRows.length) {
+      const pageCount = Math.ceil(choices.length / this.lumiExchangeRows.length);
       const pageOffset = event.code === 'ArrowRight' ? 1 : pageCount - 1;
-      const nextPage = (Math.floor(exchange.selectedIndex / this.rumiExchangeRows.length) + pageOffset) % pageCount;
+      const nextPage = (Math.floor(exchange.selectedIndex / this.lumiExchangeRows.length) + pageOffset) % pageCount;
       exchange.selectedIndex = Math.min(
-        nextPage * this.rumiExchangeRows.length + (exchange.selectedIndex % this.rumiExchangeRows.length),
+        nextPage * this.lumiExchangeRows.length + (exchange.selectedIndex % this.lumiExchangeRows.length),
         choices.length - 1,
       );
       this.playSfx('se-cursor-move');
-      this.refreshRumiExchangeUi();
+      this.refreshLumiExchangeUi();
       return true;
     }
     if (event.code === 'KeyX' || event.code === 'Escape') {
-      this.closeRumiExchange(false);
+      this.closeLumiExchange(false);
       return true;
     }
     if (!['KeyZ', 'Enter', 'Space'].includes(event.code)) {
@@ -176,33 +176,33 @@ const RumiSystem = {
       exchange.offeredItemId = choices[exchange.selectedIndex];
       exchange.phase = 'material';
       exchange.selectedIndex = 0;
-      this.refreshRumiExchangeUi();
+      this.refreshLumiExchangeUi();
       return true;
     }
     const material = choices[exchange.selectedIndex];
     this.removeInventoryOrFloorItem(material);
     this.playerStatus.addItem(exchange.offeredItemId, 1, this.itemDefinitions);
     this.playSfx('se-craft-ok');
-    this.closeRumiExchange(true);
+    this.closeLumiExchange(true);
     this.refreshInventoryUi();
-    this.destroyRumi();
-    this.actionLog.add('RUMI_HAPPY');
+    this.destroyLumi();
+    this.actionLog.add('LUMI_HAPPY');
     this.consumeItemTurn();
     return true;
   },
 
-  closeRumiExchange(exchanged) {
-    this.rumiExchangeUi.setVisible(false);
-    this.rumiExchange = null;
+  closeLumiExchange(exchanged) {
+    this.lumiExchangeUi.setVisible(false);
+    this.lumiExchange = null;
     if (!exchanged) {
       this.playSfx('se-cursor-cancel');
-      this.actionLog.add('RUMI_SAD');
+      this.actionLog.add('LUMI_SAD');
     }
   },
 
-  destroyRumi() {
-    this.rumi?.sprite.destroy();
-    this.rumi = null;
+  destroyLumi() {
+    this.lumi?.sprite.destroy();
+    this.lumi = null;
     this.updateVisibility();
   },
 };

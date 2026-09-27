@@ -193,6 +193,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('dev-flag-data', `assets/data/dev-flg.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
+    this.load.text('dungeon-data-0003', `assets/data/dungeon-0003.dat?v=${Date.now()}`);
     this.load.text('item-data', `assets/data/item.csv?v=${Date.now()}`);
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
@@ -262,6 +263,11 @@ class TitleScene extends Phaser.Scene {
       'ルミア島の地下迷宮踏破ホテル裏の下り階段レシピ図鑑完成実験体',
     );
     titleFontLoad?.then(() => this.refreshTitleFonts());
+    this.titleFontLoadingHandler = () => this.refreshTitleFonts();
+    document.fonts?.addEventListener('loadingdone', this.titleFontLoadingHandler);
+    this.events.once('shutdown', () => {
+      document.fonts?.removeEventListener('loadingdone', this.titleFontLoadingHandler);
+    });
     this.add.text(GAME_WIDTH - 24, GAME_HEIGHT - 22, `ver. ${this.cache.text.get('version-data')?.trim() || '0.0.0'}`, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
@@ -280,6 +286,7 @@ class TitleScene extends Phaser.Scene {
     const dungeonOptions = [
       { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
+      { key: 'dungeon-data-0003', file: 'dungeon-0003.dat' },
     ].map((option) => ({
       ...option,
       data: GameData.parseDungeonData(this.cache.text.get(option.key)),
@@ -298,6 +305,7 @@ class TitleScene extends Phaser.Scene {
     this.dungeonOptions = dungeonOptions;
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions, 20);
+    const isDungeon0003Unlocked = getClearedDungeonFiles().has('dungeon-0001.dat');
     const mainMenuItems = [
       this.createTitleMenuItem(GAME_WIDTH / 2, 372, dungeonOptions[0].data.dungeonName, () => {
         startDungeon(dungeonOptions[0]);
@@ -305,8 +313,15 @@ class TitleScene extends Phaser.Scene {
       this.createTitleMenuItem(GAME_WIDTH / 2, 464, dungeonOptions[1].data.dungeonName, () => {
         startDungeon(dungeonOptions[1]);
       }, dungeonOptions[1].data.dungeonDescription ?? ''),
-      this.createTitleMenuItem(GAME_WIDTH / 2, 556, 'オプション', () => this.openOptionsMenu()),
     ];
+    if (isDungeon0003Unlocked) {
+      mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 556, dungeonOptions[2].data.dungeonName, () => {
+        startDungeon(dungeonOptions[2]);
+      }, dungeonOptions[2].data.dungeonDescription ?? ''));
+    } else {
+      this.createTitleMenuItem(GAME_WIDTH / 2, 556, '???', () => {}, '', { disabled: true });
+    }
+    mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 648, 'オプション', () => this.openOptionsMenu()));
     const bookMenuItems = [
       this.createTitleMenuItem(1060, 420, 'レシピ図鑑', () => this.openRecipeBook(), '', { width: 280, height: 64, fontSize: 24 }),
       this.createTitleMenuItem(1060, 508, '実験体図鑑', () => this.openEnemyBook(), '', { width: 280, height: 64, fontSize: 24 }),
@@ -419,6 +434,7 @@ class TitleScene extends Phaser.Scene {
   refreshTitleFonts() {
     this.children.list.forEach((child) => {
       if (child.type === 'Text' && child.style.fontFamily.includes('Yusei Magic')) {
+        child.setFontFamily('sans-serif');
         child.setFontFamily('Yusei Magic, sans-serif');
         child.setText(child.text);
       }
@@ -561,7 +577,7 @@ class TitleScene extends Phaser.Scene {
     }
     const parallelRun = parseParallelCode(this.parallelCodeInputValue);
     if (!parallelRun) {
-      this.parallelCodeMessage.setText('1または2で始まる8桁の16進数を入力してください。');
+      this.parallelCodeMessage.setText('1、2、または3で始まる8桁の16進数を入力してください。');
       return;
     }
     const option = dungeonOptions.find((candidate) => candidate.key === parallelRun.dungeonDataKey);
@@ -577,20 +593,25 @@ class TitleScene extends Phaser.Scene {
   }
 
   createTitleMenuItem(x, y, label, action, subtitle = '', options = {}) {
-    const { width = 420, height = 84, fontSize = 30 } = options;
-    const background = this.add.rectangle(x, y, width, height, 0x384d58)
-      .setStrokeStyle(2, 0x6e8996)
-      .setInteractive({ useHandCursor: true });
+    const { width = 420, height = 84, fontSize = 30, disabled = false } = options;
+    const background = this.add.rectangle(x, y, width, height, disabled ? 0x000000 : 0x384d58)
+      .setStrokeStyle(2, disabled ? 0x000000 : 0x6e8996);
     const text = this.add.text(x, y + (subtitle ? -12 : 0), label, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: `${fontSize}px`,
-      color: '#f3f1e8',
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      color: disabled ? '#9ab5c7' : '#f3f1e8',
+    }).setOrigin(0.5);
     const subtitleText = subtitle ? this.add.text(x, y + 20, subtitle, {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
       color: '#b7c6d3',
-    }).setOrigin(0.5).setResolution(2).setInteractive({ useHandCursor: true }) : null;
+    }).setOrigin(0.5).setResolution(2) : null;
+    if (disabled) {
+      return { background, text, subtitleText, action, disabled };
+    }
+    background.setInteractive({ useHandCursor: true });
+    text.setInteractive({ useHandCursor: true });
+    subtitleText?.setInteractive({ useHandCursor: true });
     const selectItem = () => {
       const item = this.titleMenuItems.find((candidate) => candidate.background === background);
       this.titleSelectionColumn = item.column;
@@ -609,7 +630,7 @@ class TitleScene extends Phaser.Scene {
     background.on('pointerdown', handlePointerDown);
     text.on('pointerdown', handlePointerDown);
     subtitleText?.on('pointerdown', handlePointerDown);
-    return { background, text, subtitleText, action };
+    return { background, text, subtitleText, action, disabled };
   }
 
   updateTitleMenuSelection() {

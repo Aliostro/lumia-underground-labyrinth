@@ -3,6 +3,10 @@ const ENEMY_BOOK_STORAGE_KEY = 'lumia-underground-labyrinth-enemy-book';
 class EnemyBook {
   static IMAGE_FILES = [
     ...Array.from({ length: 45 }, (_, index) => `Chara${String(index + 2).padStart(4, '0')}.png`),
+    'Chara0047.png',
+    'Chara0047a.png',
+    'Chara0048.png',
+    'Chara0049.png',
     'Chara9000.png',
     'Chara9001.png',
   ];

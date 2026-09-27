@@ -1,5 +1,9 @@
 const TurnSystem = {
   playTurnAnimations(heroTarget, enemyMovements, allowQueuedMove, playerAttacks, enemyAttacks) {
+    if (this.alonsoPullTarget) {
+      heroTarget = this.alonsoPullTarget;
+      this.alonsoPullTarget = null;
+    }
     this.playAttackAnimations(playerAttacks, () => {
       this.playMovementAnimations(heroTarget, enemyMovements, allowQueuedMove, enemyAttacks);
     });

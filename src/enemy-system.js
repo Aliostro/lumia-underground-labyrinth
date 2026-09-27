@@ -13,19 +13,19 @@ const EnemySystem = {
     for (let index = 0; index < Math.min(enemyCount, this.dungeonData.maxEnemies); index += 1) {
       this.spawnEnemy(floorEnemies);
     }
-    this.spawnRumi(floorEnemies);
+    this.spawnLumi(floorEnemies);
   },
 
-  spawnRumi(floorEnemies) {
-    this.rumi = null;
-    if (!floorEnemies?.rumiSpawnChance || this.getInitialRandom() * 100 >= floorEnemies.rumiSpawnChance) {
+  spawnLumi(floorEnemies) {
+    this.lumi = null;
+    if (!floorEnemies?.lumiSpawnChance || this.getInitialRandom() * 100 >= floorEnemies.lumiSpawnChance) {
       return;
     }
     const candidates = this.dungeonRooms.flatMap((room) => {
       const tiles = [];
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (this.isRumiPatrolTile(x, y, room) && !this.isTileOccupied(x, y) && !this.isStairTile(x, y)) {
+          if (this.isLumiPatrolTile(x, y, room) && !this.isTileOccupied(x, y) && !this.isStairTile(x, y)) {
             tiles.push({ x, y });
           }
         }
@@ -42,8 +42,8 @@ const EnemySystem = {
       'Chara9900.png',
     ).setOrigin(0.5, 1).setDisplaySize(ENEMY_DISPLAY_SIZE, ENEMY_DISPLAY_SIZE);
     this.updateCharacterDepth(sprite, position.y);
-    this.rumi = { tileX: position.x, tileY: position.y, sprite };
-    this.updateRumiVisibility(this.getVisibleTiles(this.heroTileX, this.heroTileY));
+    this.lumi = { tileX: position.x, tileY: position.y, sprite };
+    this.updateLumiVisibility(this.getVisibleTiles(this.heroTileX, this.heroTileY));
   },
 
   spawnMonsterHouse() {
