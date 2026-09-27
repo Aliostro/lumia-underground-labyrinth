@@ -155,6 +155,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.traps = [];
     this.monsterHouseRoom = null;
     this.monsterHouseAnnounced = false;
+    this.scoutDroneActive = false;
+    this.empDroneActive = false;
+    this.fireproofCapeActive = false;
     const mapChipNumber = this.dungeonData.designMap.get(this.playerStatus.floor) ?? 1;
     this.dungeonRenderer = new DungeonRenderer(this, {
       tileSize: TILE_SIZE,
@@ -595,7 +598,7 @@ class DungeonTestScene extends Phaser.Scene {
     if (!floorItems.recipeDropEnabled) {
       return;
     }
-    const registeredRecipeIds = this.initialRandom ? new Set() : RecipeBook.getRegisteredIds();
+    const registeredRecipeIds = RecipeBook.getRegisteredIds();
     const recipeItemIds = [...this.itemDefinitions.values()]
       .filter((definition) => definition.category === 80)
       .map((definition) => definition.id);
@@ -1407,6 +1410,19 @@ class DungeonTestScene extends Phaser.Scene {
     if (definition.useEffectId === ITEM_EFFECT_CONFUSION_IMMUNITY) {
       this.playerStatus.confusionImmunity = true;
       this.actionLog.add('PLAYER_CONFUSION_IMMUNITY');
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_SCOUT_DRONE) {
+      this.scoutDroneActive = true;
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_EMP_DRONE) {
+      this.scoutDroneActive = true;
+      this.empDroneActive = true;
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_FIREPROOF_CAPE) {
+      this.fireproofCapeActive = true;
       return;
     }
     if (definition.useEffectId === ITEM_EFFECT_CALMING_HERB) {
@@ -2696,6 +2712,10 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   getExplosionDamage(baseDamage) {
+    if (this.fireproofCapeActive) {
+      this.actionLog.add('PLAYER_EXPLOSION_IMMUNE');
+      return 0;
+    }
     return this.hasEquipEffect(ITEM_EQUIP_EFFECT_EXPLOSIVE_DAMAGE_REDUCTION)
       ? Math.ceil(baseDamage * 0.5)
       : baseDamage;
@@ -2764,6 +2784,7 @@ class DungeonTestScene extends Phaser.Scene {
       kind: 'coffin',
       ownerId: enemy.id,
       ownerName: this.getEnemyLogName(enemy),
+      createdTurn: this.floorTurn + 1,
     }, enemy.tileX, enemy.tileY);
   }
 
@@ -3267,7 +3288,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     this.playerStatus.confusionJustEnded = false;
     const wasBranded = this.playerStatus.brandTurns > 0;
-    this.playerStatus.advanceTurn(moved);
+    this.playerStatus.advanceTurn(moved, this.hasEquipEffect(ITEM_EQUIP_EFFECT_CLAD_RING));
     if (this.playerStatus.hunger === 0) {
       this.dashDirection = null;
     }
@@ -4249,6 +4270,7 @@ class DungeonTestScene extends Phaser.Scene {
     const coffins = this.floorItems.filter((item) => (
       item.kind === 'coffin'
       && item.ownerId != null
+      && item.createdTurn < this.floorTurn
       && Math.max(Math.abs(item.tileX - enemy.tileX), Math.abs(item.tileY - enemy.tileY)) <= 1
     ));
     const coffin = Phaser.Utils.Array.GetRandom(coffins);

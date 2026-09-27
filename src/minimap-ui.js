@@ -34,13 +34,21 @@ class MinimapUi {
   redrawTerrain() {
     const { floorTile, corridorTile, scale, x: originX, y: originY } = this.options;
     this.graphics.clear();
-    this.discoveredTiles.forEach((coordinate) => {
-      const [x, y] = coordinate.split(',').map(Number);
-      const tile = this.scene.dungeonTiles[y]?.[x];
+    const drawTile = (x, y, tile) => {
       if (tile === floorTile || tile === corridorTile) {
         this.graphics.fillStyle(0x76d7ea, 0.9);
         this.graphics.fillRect(originX + x * scale, originY + y * scale, scale, scale);
       }
+    };
+    if (this.scene.empDroneActive) {
+      this.scene.dungeonTiles.forEach((row, y) => {
+        row.forEach((tile, x) => drawTile(x, y, tile));
+      });
+      return;
+    }
+    this.discoveredTiles.forEach((coordinate) => {
+      const [x, y] = coordinate.split(',').map(Number);
+      drawTile(x, y, this.scene.dungeonTiles[y]?.[x]);
     });
   }
 
@@ -51,7 +59,8 @@ class MinimapUi {
       item.equipped != null
       && this.scene.itemDefinitions.get(item.id)?.equipEffectId === 0
       && this.scene.itemEquipEffectDefinitions.has(0)
-    ));
+    )) || this.scene.scoutDroneActive;
+    const detectsAllStairs = this.scene.empDroneActive;
     this.marker.clear();
     this.marker.fillStyle(0x3d9b57);
     this.marker.lineStyle(0.5, 0x000000);
@@ -73,7 +82,7 @@ class MinimapUi {
       this.marker.lineBetween(trapX - markerRadius, trapY - markerRadius, trapX + markerRadius, trapY + markerRadius);
       this.marker.lineBetween(trapX - markerRadius, trapY + markerRadius, trapX + markerRadius, trapY - markerRadius);
     });
-    if (this.scene.stairs?.discovered) {
+    if (this.scene.stairs?.discovered || detectsAllStairs) {
       const stairsX = originX + (this.scene.stairs.x + 0.5) * scale;
       const stairsY = originY + (this.scene.stairs.y + 0.5) * scale;
       this.marker.fillStyle(0xffffff);

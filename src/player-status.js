@@ -139,7 +139,7 @@ class PlayerStatus {
     this.gainExperience(this.getLevelStartExperience(targetLevel));
   }
 
-  advanceTurn(moved) {
+  advanceTurn(moved, hasCladRing = false) {
     if (this.hunger === 0) {
       this.hitPoints = Math.max(0, this.hitPoints - 1);
     } else {
@@ -148,10 +148,13 @@ class PlayerStatus {
         this.hunger -= 1;
         this.stepsSinceHungerLoss = 0;
       }
+      if (hasCladRing) {
+        this.hunger = Math.max(0, this.hunger - 1);
+      }
     }
 
     if (this.hunger > 0 && this.hitPoints < this.maxHitPoints && this.brandTurns === 0) {
-      this.recoveryProgress += this.maxHitPoints / 100;
+      this.recoveryProgress += this.maxHitPoints / 100 * (hasCladRing ? 3 : 1);
       const recovery = Math.floor(this.recoveryProgress);
       this.hitPoints = Math.min(this.maxHitPoints, this.hitPoints + recovery);
       this.recoveryProgress -= recovery;
