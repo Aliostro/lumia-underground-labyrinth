@@ -197,6 +197,12 @@ class TitleScene extends Phaser.Scene {
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
     this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
+    [1, 2, 3, 4, 5].forEach((number) => {
+      this.load.spritesheet(`map-chips-${String(number).padStart(4, '0')}`, `assets/image/MapChip${String(number).padStart(4, '0')}.png`, {
+        frameWidth: TILE_SIZE,
+        frameHeight: TILE_SIZE,
+      });
+    });
     DUNGEON_CLEAR_DISPLAYS.forEach(({ imageKey, imageFile }) => this.load.image(imageKey, `assets/image/${imageFile}`));
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
@@ -213,10 +219,37 @@ class TitleScene extends Phaser.Scene {
     this.load.image('icon-complete-enemy-book', 'assets/image/IconCompEnemyBook.png');
   }
 
+  createDungeonBackground() {
+    const dungeon = new DungeonGenerator().generate();
+    const mapChipNumber = Phaser.Math.Between(1, 5);
+    const renderer = new DungeonRenderer(this, {
+      tileSize: TILE_SIZE,
+      floorTile: FLOOR_TILE,
+      corridorTile: CORRIDOR_TILE,
+      decorationChance: FLOOR_DECORATION_CHANCE,
+      chunkSize: MAP_CHUNK_SIZE,
+      marginX: OUTER_WALL_MARGIN_X,
+      marginY: OUTER_WALL_MARGIN_Y,
+      mapChipKey: `map-chips-${String(mapChipNumber).padStart(4, '0')}`,
+    });
+    renderer.draw(dungeon);
+    const backgroundScale = 0.25;
+    const mapWidth = dungeon.tiles[0].length * TILE_SIZE;
+    const mapHeight = dungeon.tiles.length * TILE_SIZE;
+    const offsetX = (GAME_WIDTH - mapWidth * backgroundScale) / 2;
+    const offsetY = (GAME_HEIGHT - mapHeight * backgroundScale) / 2;
+    renderer.mapChunks.forEach((chunk) => chunk
+      .setScale(backgroundScale)
+      .setPosition(chunk.x * backgroundScale + offsetX, chunk.y * backgroundScale + offsetY));
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x101820, 0.72)
+      .setDepth(-0.5);
+  }
+
   create() {
     applySfxVolume(this.sound);
     this.debugKeysEnabled = areDebugKeysEnabled(this.cache.text.get('dev-flag-data'));
     this.cameras.main.setBackgroundColor('#101820');
+    this.createDungeonBackground();
     this.titleText = this.add.text(GAME_WIDTH / 2, 190, 'ルミア島の地下迷宮', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '56px',
