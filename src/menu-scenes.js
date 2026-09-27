@@ -8,8 +8,8 @@ const DUNGEON_CLEAR_DISPLAYS = [
 ];
 const PLAYER_SKINS = [
   { key: 'player-skin-default', file: 'Chara0001.png', label: 'デフォルト' },
-  { key: 'player-skin-alternate', file: 'Chara0001a.png', label: 'ブラサバ' },
-  { key: 'player-skin-detective', file: 'Chara0001b.png', label: '探偵' },
+  { key: 'player-skin-alternate', file: 'Chara0001a.png', label: 'ブラサバ', unlockDungeonFile: 'dungeon-0001.dat' },
+  { key: 'player-skin-detective', file: 'Chara0001b.png', label: '探偵', unlockDungeonFile: 'dungeon-0002.dat' },
 ];
 
 function getSfxVolume() {
@@ -51,12 +51,25 @@ function getClearedDungeonFiles() {
 
 function markDungeonCleared(dungeonFile) {
   const clearedFiles = getClearedDungeonFiles();
+  const firstClear = !clearedFiles.has(dungeonFile);
   clearedFiles.add(dungeonFile);
   try {
     window.localStorage.setItem(DUNGEON_CLEAR_STORAGE_KEY, JSON.stringify([...clearedFiles]));
   } catch {
     // Keep gameplay functional when browser storage is unavailable.
   }
+  return firstClear;
+}
+
+function getUnlockedPlayerSkinIndexes() {
+  const clearedFiles = getClearedDungeonFiles();
+  return PLAYER_SKINS.flatMap((skin, index) => (
+    !skin.unlockDungeonFile || clearedFiles.has(skin.unlockDungeonFile) ? [index] : []
+  ));
+}
+
+function getSkinUnlockedByDungeonClear(dungeonFile) {
+  return PLAYER_SKINS.find((skin) => skin.unlockDungeonFile === dungeonFile) ?? null;
 }
 
 function markAllDungeonsCleared() {
@@ -86,7 +99,7 @@ function areDebugKeysEnabled(value) {
 function getPlayerSkinIndex() {
   try {
     const savedIndex = Number(window.localStorage.getItem(PLAYER_SKIN_STORAGE_KEY));
-    if (Number.isInteger(savedIndex) && PLAYER_SKINS[savedIndex]) {
+    if (Number.isInteger(savedIndex) && getUnlockedPlayerSkinIndexes().includes(savedIndex)) {
       return savedIndex;
     }
   } catch {
@@ -96,7 +109,8 @@ function getPlayerSkinIndex() {
 }
 
 function setPlayerSkinIndex(index) {
-  const normalizedIndex = Phaser.Math.Wrap(index, 0, PLAYER_SKINS.length);
+  const unlockedSkinIndexes = getUnlockedPlayerSkinIndexes();
+  const normalizedIndex = unlockedSkinIndexes.includes(index) ? index : unlockedSkinIndexes[0];
   try {
     window.localStorage.setItem(PLAYER_SKIN_STORAGE_KEY, String(normalizedIndex));
   } catch {
@@ -669,7 +683,11 @@ class TitleScene extends Phaser.Scene {
       this.updateSfxVolumeDisplay();
       this.sound.play('se-cursor-move');
     } else if ((code === 'ArrowLeft' || code === 'ArrowRight') && this.optionSelection === 1) {
-      setPlayerSkinIndex(getPlayerSkinIndex() + (code === 'ArrowLeft' ? -1 : 1));
+      const unlockedSkinIndexes = getUnlockedPlayerSkinIndexes();
+      const currentIndex = unlockedSkinIndexes.indexOf(getPlayerSkinIndex());
+      const nextIndex = (currentIndex + (code === 'ArrowLeft' ? -1 : 1) + unlockedSkinIndexes.length)
+        % unlockedSkinIndexes.length;
+      setPlayerSkinIndex(unlockedSkinIndexes[nextIndex]);
       this.updatePlayerSkinDisplay();
       this.sound.play('se-cursor-move');
     } else if (code === 'KeyX' || code === 'Escape' || code === 'KeyZ' || code === 'Enter' || code === 'Space') {
@@ -720,6 +738,21 @@ class ResultScene extends Phaser.Scene {
       fontSize: '22px',
       color: '#9ab5c7',
     }).setOrigin(0.5);
+    if (result?.unlockedSkin) {
+      const alertX = GAME_WIDTH - 495;
+      const alertY = 24;
+      this.add.rectangle(alertX, alertY, 470, 126, 0x17212a, 0.96)
+        .setOrigin(0).setStrokeStyle(2, 0x76d7ea);
+      this.add.image(alertX + 54, alertY + 108, result.unlockedSkin.key)
+        .setDisplaySize(88, 88).setOrigin(0.5, 1);
+      this.add.text(alertX + 110, alertY + 63, `${result.unlockedSkin.label}スキンが使えるようになった！\nスキンはオプションで変更することができます。`, {
+        fontFamily: 'Yusei Magic, sans-serif',
+        fontSize: '13px',
+        color: '#f3f1e8',
+        lineSpacing: 9,
+        wordWrap: { width: 345 },
+      }).setOrigin(0, 0.5);
+    }
     if (parallelCode) {
       this.add.text(GAME_WIDTH / 2, 175, `(${parallelCode})`, {
         fontFamily: 'Yusei Magic, sans-serif',

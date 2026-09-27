@@ -93,6 +93,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('Chara0046.png', 'assets/image/Chara0046.png');
     this.load.image('Chara9000.png', 'assets/image/Chara9000.png');
     this.load.image('Chara9001.png', 'assets/image/Chara9001.png');
+    this.load.image('Chara9900.png', 'assets/image/Chara9900.png');
     this.load.image('symbol-gold', 'assets/image/SymbolGold.png');
     this.load.image('symbol-dia', 'assets/image/SymbolDia.png');
     this.load.image('symbol-mith', 'assets/image/SymbolMith.png');
@@ -272,6 +273,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.recipeBook = new RecipeBook(this, this.itemDefinitions);
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions);
     this.actionLog = new ActionLog(this, this.messageData, () => this.floorTurn);
+    this.createRumiExchangeUi();
     this.messageLogScrollDirection = 0;
     this.messageLogScrollNextAt = 0;
     this.time.delayedCall(0, () => {
@@ -309,6 +311,10 @@ class DungeonTestScene extends Phaser.Scene {
             this.messageLogScrollNextAt = this.time.now + 280;
           }
         }
+        return;
+      }
+      if (this.rumiExchangeUi?.visible) {
+        this.handleRumiExchangeInput(event);
         return;
       }
       if (this.recipeBook.container.visible) {
@@ -749,6 +755,7 @@ class DungeonTestScene extends Phaser.Scene {
     const visibleTiles = this.getVisibleTiles(tileX, tileY);
     this.revealMinimapTiles(visibleTiles);
     this.updateEnemyVisibility(visibleTiles);
+    this.updateRumiVisibility(visibleTiles);
     this.firePillars.forEach((pillar) => {
       pillar.graphics.setVisible(visibleTiles.has(`${pillar.tileX},${pillar.tileY}`));
     });
@@ -1342,6 +1349,38 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   applyItemUseEffect(definition, wasAtMaximumHitPoints, wasAtMaximumHunger, options = {}) {
+    if (definition.useEffectId === ITEM_EFFECT_FIRST_AID_KIT) {
+      if (this.playerStatus.confusionTurns > 0) {
+        this.playerStatus.confusionTurns = 0;
+        this.actionLog.add('CONFUSION_ENDED', { target: 'プレイヤー' });
+      }
+      if (this.playerStatus.slowTurns > 0) {
+        this.playerStatus.slowTurns = 0;
+        this.playerStatus.slowSkipNextTurn = false;
+        this.actionLog.add('PLAYER_SLOW_ENDED');
+      }
+      if (this.playerStatus.peaceTurns > 0) {
+        this.playerStatus.peaceTurns = 0;
+        this.actionLog.add('PLAYER_PEACE_ENDED');
+      }
+      if (this.playerStatus.brandTurns > 0) {
+        this.playerStatus.brandTurns = 0;
+        this.actionLog.add('PLAYER_BRAND_ENDED');
+      }
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_SELENE_TEARS) {
+      this.playerStatus.baseAttack += 1;
+      this.playerStatus.updateEquipmentStats();
+      this.actionLog.add('PLAYER_ATTACK_INCREASED');
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_HOLY_WATER) {
+      this.playerStatus.baseDefense += 1;
+      this.playerStatus.updateEquipmentStats();
+      this.actionLog.add('PLAYER_DEFENSE_INCREASED');
+      return;
+    }
     if (
       definition.useEffectId === ITEM_EFFECT_FLYING_HERB
       || definition.useEffectId === ITEM_EFFECT_JUMP_PAD
@@ -1519,7 +1558,7 @@ class DungeonTestScene extends Phaser.Scene {
     const throwResult = volticlet
       ? { destination: this.getVolticletDestination(direction), enemy: null }
       : this.getThrowDestination(direction);
-    const { destination } = throwResult;
+    const { destination, dropDestination = destination } = throwResult;
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
     this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
     this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder || theDeath || theHermit ? '撃った' : '投げた' });
@@ -1590,7 +1629,7 @@ class DungeonTestScene extends Phaser.Scene {
           }
         } else {
           this.playSfx('se-miss');
-          const dropped = this.placeDroppedItem(item, destination.x, destination.y);
+          const dropped = this.placeDroppedItem(item, dropDestination.x, dropDestination.y);
           if (!dropped) {
             this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
           }
@@ -1932,6 +1971,7 @@ class DungeonTestScene extends Phaser.Scene {
 
   getThrowDestination(direction) {
     let destination = { x: this.heroTileX, y: this.heroTileY };
+    let dropDestination = destination;
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
@@ -1939,12 +1979,15 @@ class DungeonTestScene extends Phaser.Scene {
         break;
       }
       destination = { x: tileX, y: tileY };
+      if (!this.isRumiAt(tileX, tileY)) {
+        dropDestination = destination;
+      }
       const enemy = this.getEnemyAt(tileX, tileY);
       if (enemy) {
-        return { destination, enemy };
+        return { destination, dropDestination, enemy };
       }
     }
-    return { destination, enemy: null };
+    return { destination, dropDestination, enemy: null };
   }
 
   applyThrownItemToEnemy(item, definition, enemy) {
@@ -2233,6 +2276,23 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   applyItemEffectToEnemy(definition, enemy) {
+    if (definition.useEffectId === ITEM_EFFECT_FIRST_AID_KIT) {
+      enemy.confusionTurns = 0;
+      enemy.slowTurns = 0;
+      enemy.slowSkipNextTurn = false;
+      enemy.peaceTurns = 0;
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_SELENE_TEARS) {
+      enemy.attack += 1;
+      this.actionLog.add('ENEMY_ATTACK_INCREASED', { enemy: this.getEnemyLogName(enemy) });
+      return;
+    }
+    if (definition.useEffectId === ITEM_EFFECT_HOLY_WATER) {
+      enemy.defense += 1;
+      this.actionLog.add('ENEMY_DEFENSE_INCREASED', { enemy: this.getEnemyLogName(enemy) });
+      return;
+    }
     if (definition.useEffectId === ITEM_EFFECT_LUCKY_HERB) {
       if (this.isJackie(enemy)) {
         enemy.attack += 5;
@@ -2604,7 +2664,10 @@ class DungeonTestScene extends Phaser.Scene {
       equipment,
     };
     if (succeeded) {
-      markDungeonCleared(this.dungeonDataFile);
+      const firstClear = markDungeonCleared(this.dungeonDataFile);
+      if (firstClear) {
+        result.unlockedSkin = getSkinUnlockedByDungeonClear(this.dungeonDataFile);
+      }
       this.scene.start('ResultScene', result);
     } else {
       this.time.delayedCall(1000, () => this.scene.start('ResultScene', result));
@@ -2980,6 +3043,7 @@ class DungeonTestScene extends Phaser.Scene {
     const nextY = this.heroTileY + offsetY;
     const destination = this.dungeonTiles[nextY]?.[nextX];
     const enemy = this.getEnemyAt(nextX, nextY);
+    const rumi = this.isRumiAt(nextX, nextY);
     const currentRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
     const nextRoom = this.getRoomAt(nextX, nextY);
     const isDashing = this.dashDirection != null;
@@ -3032,6 +3096,12 @@ class DungeonTestScene extends Phaser.Scene {
     }
 
     if (currentRoom && !nextRoom && this.warpHeroFromNia(currentRoom)) {
+      return;
+    }
+
+    if (rumi) {
+      this.dashDirection = null;
+      this.startRumiExchange();
       return;
     }
 
@@ -3546,6 +3616,10 @@ class DungeonTestScene extends Phaser.Scene {
   resolveEnemyTurn() {
     const movements = [];
     const attacks = [];
+    const rumiMovement = this.resolveRumiTurn();
+    if (rumiMovement) {
+      movements.push(rumiMovement);
+    }
     this.sleepAppliedEnemies ||= new Set();
     this.sleepJustEndedEnemies = new Set();
     this.confusionAppliedEnemies ||= new Set();
@@ -4639,7 +4713,7 @@ class DungeonTestScene extends Phaser.Scene {
       targets.push(this.hero);
     }
     this.enemies.forEach((target) => {
-      if (target !== enemy && this.isEnemyAdjacentTo(enemy, target.tileX, target.tileY)) {
+      if (target !== enemy && target !== this.rumi && this.isEnemyAdjacentTo(enemy, target.tileX, target.tileY)) {
         targets.push(target);
       }
     });
@@ -6213,7 +6287,8 @@ class DungeonTestScene extends Phaser.Scene {
 
   isTileOccupied(tileX, tileY) {
     return (tileX === this.heroTileX && tileY === this.heroTileY)
-      || this.enemies.some((enemy) => enemy.tileX === tileX && enemy.tileY === tileY);
+      || this.enemies.some((enemy) => enemy.tileX === tileX && enemy.tileY === tileY)
+      || this.isRumiAt(tileX, tileY);
   }
 
   getEnemyAt(tileX, tileY) {
@@ -6236,7 +6311,7 @@ class DungeonTestScene extends Phaser.Scene {
 
 }
 
-Object.assign(DungeonTestScene.prototype, InventoryUiBehavior, EnemySystem, EnemyAbilities, TurnSystem);
+Object.assign(DungeonTestScene.prototype, InventoryUiBehavior, EnemySystem, EnemyAbilities, RumiSystem, TurnSystem);
 
 const config = {
   type: Phaser.AUTO,

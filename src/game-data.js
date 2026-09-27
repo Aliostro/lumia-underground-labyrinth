@@ -118,11 +118,11 @@ class GameData {
     const itemMapSection = data.split('[item-map]')[1] || '';
 
     enemyMapSection.trim().split(/\r?\n/).forEach((line) => {
-      const match = line.match(/^(\d+):\s*\[(\d+)-(\d+)\]\s*<(\d+)(?:\/(\d+))?>\s*(?:\|(\d+)\|\s*)?(.+)$/);
+      const match = line.match(/^(\d+):\s*\[(\d+)-(\d+)\]\s*<(\d+)(?:\/(\d+))?>\s*(?:\|(\d+)\|\s*)?(?:r(\d{1,3})\s+)?(.+)$/);
       if (!match) {
         return;
       }
-      const entries = match[7].split(',').map((entry) => {
+      const entries = match[8].split(',').map((entry) => {
         const [id, weight] = entry.trim().split('^').map(Number);
         return { id, weight };
       });
@@ -136,6 +136,7 @@ class GameData {
         respawnInterval: Number(match[4]),
         turnLimit: Number(match[5]) || 0,
         monsterHouseChance: Number(match[6]) || 0,
+        rumiSpawnChance: Math.min(100, Number(match[7]) || 0),
         entries,
       });
     });
