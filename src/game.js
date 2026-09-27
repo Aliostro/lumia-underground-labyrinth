@@ -601,9 +601,12 @@ class DungeonTestScene extends Phaser.Scene {
       .map((definition) => definition.id);
     const unregisteredRecipeItemIds = recipeItemIds.filter((id) => !registeredRecipeIds.has(id));
     const registeredRecipeItemIds = recipeItemIds.filter((id) => registeredRecipeIds.has(id));
-    const recipeItemCount = this.getInitialRandomInteger(
-      floorItems.minimumRecipeItems,
-      floorItems.maximumRecipeItems,
+    const recipeItemCount = Math.max(
+      this.getInitialRandomInteger(
+        floorItems.minimumRecipeItems,
+        floorItems.maximumRecipeItems,
+      ),
+      unregisteredRecipeItemIds.length > 0 ? 1 : 0,
     );
     const spawnedRecipeIds = new Set();
     for (let index = 0; index < recipeItemCount; index += 1) {
@@ -615,20 +618,18 @@ class DungeonTestScene extends Phaser.Scene {
         .filter((id) => !spawnedRecipeIds.has(id));
       const availableRegisteredRecipeItemIds = registeredRecipeItemIds
         .filter((id) => !spawnedRecipeIds.has(id));
-      const preferredRecipeItemIds = this.getInitialRandom() < 0.7
-        ? availableUnregisteredRecipeItemIds
-        : availableRegisteredRecipeItemIds;
-      const fallbackRecipeItemIds = preferredRecipeItemIds === availableUnregisteredRecipeItemIds
-        ? availableRegisteredRecipeItemIds
-        : availableUnregisteredRecipeItemIds;
-      if (preferredRecipeItemIds.length === 0 && fallbackRecipeItemIds.length === 0) {
+      const recipeCandidates = index === 0 && availableUnregisteredRecipeItemIds.length > 0
+        ? availableUnregisteredRecipeItemIds.map((id) => ({ id, weight: 8 }))
+        : [
+          ...availableUnregisteredRecipeItemIds.map((id) => ({ id, weight: 8 })),
+          ...availableRegisteredRecipeItemIds.map((id) => ({ id, weight: 2 })),
+        ];
+      const recipeItem = this.chooseFloorItem(recipeCandidates);
+      if (!recipeItem) {
         return;
       }
-      const recipeItemId = this.getInitialRandomItem(preferredRecipeItemIds.length > 0
-        ? preferredRecipeItemIds
-        : fallbackRecipeItemIds);
-      this.placeFloorItem({ id: recipeItemId }, position.x, position.y);
-      spawnedRecipeIds.add(recipeItemId);
+      this.placeFloorItem(recipeItem, position.x, position.y);
+      spawnedRecipeIds.add(recipeItem.id);
     }
   }
 
@@ -995,16 +996,18 @@ class DungeonTestScene extends Phaser.Scene {
   updateEnemyVisibility(visibleTiles) {
     this.enemies.forEach((enemy) => {
       const visible = visibleTiles.has(`${enemy.tileX},${enemy.tileY}`);
+      const statusMarkerVisible = visible && !enemy.disguised;
+      const statusMarkerDepth = statusMarkerVisible ? FOG_DEPTH + 1 : enemy.sprite.depth + 1;
       enemy.sprite.setVisible(visible);
       enemy.symbolOutline?.setVisible(visible && !enemy.disguised);
       enemy.symbol?.setVisible(visible && !enemy.disguised);
       enemy.jackieLevelText?.setVisible(visible && !enemy.disguised);
-      enemy.sleepText.setVisible(visible && !enemy.disguised && enemy.status != null);
-      enemy.confusionText?.setVisible(visible && !enemy.disguised && enemy.confusionTurns > 0);
-      enemy.peaceText?.setVisible(visible && !enemy.disguised && enemy.peaceTurns > 0);
-      enemy.hasteText?.setVisible(visible && !enemy.disguised && this.isEnemyHasted(enemy));
-      enemy.slowText?.setVisible(visible && !enemy.disguised && this.isEnemySlowed(enemy));
-      enemy.paralysisText?.setVisible(visible && !enemy.disguised && enemy.paralysisTurns > 0);
+      enemy.sleepText.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.status != null);
+      enemy.confusionText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.confusionTurns > 0);
+      enemy.peaceText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.peaceTurns > 0);
+      enemy.hasteText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && this.isEnemyHasted(enemy));
+      enemy.slowText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && this.isEnemySlowed(enemy));
+      enemy.paralysisText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.paralysisTurns > 0);
     });
     this.floorItems.forEach((item) => {
       item.marker.setVisible(visibleTiles.has(`${item.tileX},${item.tileY}`));
@@ -3095,10 +3098,6 @@ class DungeonTestScene extends Phaser.Scene {
       return;
     }
 
-    if (currentRoom && !nextRoom && this.warpHeroFromNia(currentRoom)) {
-      return;
-    }
-
     if (rumi) {
       this.dashDirection = null;
       this.startRumiExchange();
@@ -3142,6 +3141,10 @@ class DungeonTestScene extends Phaser.Scene {
       this.resolvePlayerTurn(false);
       const enemyTurn = this.resolveEnemyTurnAfterPlayerAction();
       this.playTurnAnimations(null, enemyTurn.movements, false, playerAttacks, enemyTurn.attacks);
+      return;
+    }
+
+    if (currentRoom && !nextRoom && this.warpHeroFromNia(currentRoom)) {
       return;
     }
 
