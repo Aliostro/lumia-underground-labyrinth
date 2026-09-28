@@ -31,6 +31,7 @@ class DungeonTestScene extends Phaser.Scene {
       frameWidth: TILE_SIZE,
       frameHeight: TILE_SIZE,
     });
+    this.load.image('water', 'assets/image/Water.png');
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     this.load.image('stairs', 'assets/image/Steps.png');
     this.load.image('WanaSpring', 'assets/image/WanaSpring.png');
@@ -146,7 +147,13 @@ class DungeonTestScene extends Phaser.Scene {
     this.initialRandom = this.parallelCode
       ? createParallelFloorRandom(this.parallelCode, this.playerStatus.floor)
       : null;
-    const dungeon = new DungeonGenerator(() => this.getInitialRandom()).generate();
+    const floorDesign = this.dungeonData.designMap.get(this.playerStatus.floor) ?? {
+      mapChipNumber: 1,
+      waterChance: 0,
+    };
+    const dungeon = new DungeonGenerator(() => this.getInitialRandom()).generate({
+      waterChance: floorDesign.waterChance,
+    });
     this.dungeonTiles = dungeon.tiles;
     this.dungeonRooms = dungeon.rooms;
     this.corridorTiles = this.getCorridorTiles();
@@ -163,11 +170,13 @@ class DungeonTestScene extends Phaser.Scene {
     this.empDroneActive = false;
     this.fireproofCapeActive = false;
     this.mithrilBootsActive = false;
-    const mapChipNumber = this.dungeonData.designMap.get(this.playerStatus.floor) ?? 1;
+    const mapChipNumber = floorDesign.mapChipNumber;
     this.dungeonRenderer = new DungeonRenderer(this, {
       tileSize: TILE_SIZE,
       floorTile: FLOOR_TILE,
       corridorTile: CORRIDOR_TILE,
+      waterTile: WATER_TILE,
+      waterKey: 'water',
       decorationChance: FLOOR_DECORATION_CHANCE,
       chunkSize: MAP_CHUNK_SIZE,
       marginX: OUTER_WALL_MARGIN_X,
@@ -177,11 +186,23 @@ class DungeonTestScene extends Phaser.Scene {
     this.dungeonRenderer.draw(dungeon);
 
     const spawnRoom = this.getInitialRandomItem(dungeon.rooms);
-    this.heroTileX = spawnRoom.centerX;
-    this.heroTileY = spawnRoom.centerY;
+    const spawnTiles = [];
+    for (let y = spawnRoom.y; y < spawnRoom.y + spawnRoom.height; y += 1) {
+      for (let x = spawnRoom.x; x < spawnRoom.x + spawnRoom.width; x += 1) {
+        if (this.isWalkableTile(this.dungeonTiles[y]?.[x])) {
+          spawnTiles.push({ x, y });
+        }
+      }
+    }
+    const spawnPosition = this.getInitialRandomItem(spawnTiles) || {
+      x: spawnRoom.centerX,
+      y: spawnRoom.centerY,
+    };
+    this.heroTileX = spawnPosition.x;
+    this.heroTileY = spawnPosition.y;
     this.hero = this.add.image(
-      (spawnRoom.centerX + 0.5) * TILE_SIZE,
-      (spawnRoom.centerY + 1) * TILE_SIZE,
+      (spawnPosition.x + 0.5) * TILE_SIZE,
+      (spawnPosition.y + 1) * TILE_SIZE,
       PLAYER_SKINS[this.playerSkinIndex]?.key ?? PLAYER_SKINS[0].key,
     );
     this.hero.setOrigin(0.5, 1);
@@ -658,7 +679,11 @@ class DungeonTestScene extends Phaser.Scene {
     this.dungeonRooms.forEach((room) => {
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (!this.isTileOccupied(x, y) && !this.hasStaticObjectAt(x, y)) {
+          if (
+            this.isWalkableTile(this.dungeonTiles[y]?.[x])
+            && !this.isTileOccupied(x, y)
+            && !this.hasStaticObjectAt(x, y)
+          ) {
             candidates.push({ x, y });
           }
         }
@@ -672,7 +697,10 @@ class DungeonTestScene extends Phaser.Scene {
     this.dungeonRooms.forEach((room) => {
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (x !== this.heroTileX || y !== this.heroTileY) {
+          if (
+            this.isWalkableTile(this.dungeonTiles[y]?.[x])
+            && (x !== this.heroTileX || y !== this.heroTileY)
+          ) {
             candidates.push({ x, y });
           }
         }
@@ -701,6 +729,125 @@ class DungeonTestScene extends Phaser.Scene {
       });
     });
     return tiles;
+  }
+
+  clearWaterInRoom(room) {
+    if (!room) {
+      return;
+    }
+    const clearedTiles = [];
+    for (let y = room.y; y < room.y + room.height; y += 1) {
+      for (let x = room.x; x < room.x + room.width; x += 1) {
+        if (this.dungeonTiles[y]?.[x] === WATER_TILE) {
+          this.dungeonTiles[y][x] = FLOOR_TILE;
+          clearedTiles.push({ x, y });
+        }
+      }
+    }
+    if (clearedTiles.length > 0) {
+      this.dungeonRenderer.refreshTiles(clearedTiles);
+      this.minimapUi?.refreshTiles(clearedTiles);
+    }
+  }
+
+  warpCharactersFromWater() {
+    if (this.waterWarpPending) {
+      return;
+    }
+    const heroInWater = this.dungeonTiles[this.heroTileY]?.[this.heroTileX] === WATER_TILE;
+    const enemiesInWater = this.enemies.filter((enemy) => (
+      this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE
+    ));
+    if (!heroInWater && enemiesInWater.length === 0) {
+      return;
+    }
+    this.waterWarpPending = this.time.delayedCall(300, () => {
+      this.waterWarpPending = null;
+      this.completeWaterWarps();
+    });
+  }
+
+  completeWaterWarps() {
+    const findDestination = (excludedCharacter) => this.dungeonRooms
+      .flatMap((room) => {
+        const tiles = [];
+        for (let y = room.y; y < room.y + room.height; y += 1) {
+          for (let x = room.x; x < room.x + room.width; x += 1) {
+            if (
+              this.isWalkableTile(this.dungeonTiles[y]?.[x])
+              && !this.isStairTile(x, y)
+              && !this.enemies.some((enemy) => enemy !== excludedCharacter && enemy.tileX === x && enemy.tileY === y)
+              && (excludedCharacter === this.hero || x !== this.heroTileX || y !== this.heroTileY)
+            ) {
+              tiles.push({ x, y });
+            }
+          }
+        }
+        return tiles;
+      });
+    if (this.dungeonTiles[this.heroTileY]?.[this.heroTileX] === WATER_TILE) {
+      const destination = Phaser.Utils.Array.GetRandom(findDestination(this.hero));
+      if (destination) {
+        this.heroTileX = destination.x;
+        this.heroTileY = destination.y;
+        this.hero.setPosition((destination.x + 0.5) * TILE_SIZE, (destination.y + 1) * TILE_SIZE);
+        this.updateHeroDepth(destination.y);
+        this.setHeroEnteredRoom(this.getRoomAt(destination.x, destination.y));
+        this.playSfx('se-warp');
+        this.actionLog.add('PLAYER_WATER_WARPED');
+      }
+    }
+    this.enemies.forEach((enemy) => {
+      if (this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE) {
+        return;
+      }
+      const destination = Phaser.Utils.Array.GetRandom(findDestination(enemy));
+      if (!destination) {
+        return;
+      }
+      enemy.tileX = destination.x;
+      enemy.tileY = destination.y;
+      enemy.sprite.setPosition((destination.x + 0.5) * TILE_SIZE, (destination.y + 1) * TILE_SIZE);
+      this.updateCharacterDepth(enemy.sprite, destination.y);
+      this.updateEnemySymbolDepth(enemy);
+    });
+    this.updateVisibility();
+    this.drawMinimapMarker();
+  }
+
+  getConnectedCorridorTileKeys(startX, startY) {
+    const corridorTiles = new Set();
+    const queue = [{ x: startX, y: startY }];
+    for (let index = 0; index < queue.length; index += 1) {
+      const tile = queue[index];
+      const key = `${tile.x},${tile.y}`;
+      if (corridorTiles.has(key) || this.dungeonTiles[tile.y]?.[tile.x] !== CORRIDOR_TILE) {
+        continue;
+      }
+      corridorTiles.add(key);
+      [
+        { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
+      ].forEach((direction) => queue.push({ x: tile.x + direction.x, y: tile.y + direction.y }));
+    }
+    return corridorTiles;
+  }
+
+  getRoomCorridorExits(room) {
+    const exits = new Map();
+    for (let y = room.y; y < room.y + room.height; y += 1) {
+      for (let x = room.x; x < room.x + room.width; x += 1) {
+        [
+          { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 },
+        ].forEach((direction) => {
+          const exitX = x + direction.x;
+          const exitY = y + direction.y;
+          if (this.dungeonTiles[exitY]?.[exitX] === CORRIDOR_TILE) {
+            exits.set(`${exitX},${exitY}`, { x: exitX, y: exitY });
+          }
+        });
+      }
+    }
+    return [...exits.values()];
   }
 
   updateCharacterDepth(sprite, tileY) {
@@ -872,6 +1019,7 @@ class DungeonTestScene extends Phaser.Scene {
       const hasted = this.isEnemyHasted(enemy);
       const slowed = this.isEnemySlowed(enemy);
       const paralyzed = enemy.paralysisTurns > 0;
+      const sealed = enemy.isSealed;
       const activeMarkers = [
         sleeping && 'sleep',
         peaceful && 'peace',
@@ -879,6 +1027,7 @@ class DungeonTestScene extends Phaser.Scene {
         confused && 'confusion',
         slowed && 'slow',
         paralyzed && 'paralysis',
+        sealed && 'seal',
       ].filter(Boolean);
       const visibleMarker = activeMarkers[statusMarkerTick % activeMarkers.length];
       const showMarker = enemy.sprite.visible && !enemy.disguised;
@@ -894,6 +1043,8 @@ class DungeonTestScene extends Phaser.Scene {
         .setVisible(showMarker && visibleMarker === 'slow');
       enemy.paralysisText?.setPosition(enemy.sprite.x + 34, enemy.sprite.y - 90)
         .setVisible(showMarker && visibleMarker === 'paralysis');
+      enemy.sealText?.setPosition(enemy.sprite.x + 34, enemy.sprite.y - 90)
+        .setVisible(showMarker && visibleMarker === 'seal');
     });
   }
 
@@ -1016,6 +1167,7 @@ class DungeonTestScene extends Phaser.Scene {
       enemy.hasteText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && this.isEnemyHasted(enemy));
       enemy.slowText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && this.isEnemySlowed(enemy));
       enemy.paralysisText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.paralysisTurns > 0);
+      enemy.sealText?.setDepth(statusMarkerDepth).setVisible(statusMarkerVisible && enemy.isSealed);
     });
     this.floorItems.forEach((item) => {
       item.marker.setVisible(visibleTiles.has(`${item.tileX},${item.tileY}`));
@@ -1210,6 +1362,7 @@ class DungeonTestScene extends Phaser.Scene {
         || definition.useEffectId === ITEM_EFFECT_THE_MOON
         || definition.useEffectId === ITEM_EFFECT_THE_DEATH
         || definition.useEffectId === ITEM_EFFECT_THE_HERMIT
+        || definition.useEffectId === ITEM_EFFECT_SCALPEL
       )
     ) {
       this.pendingThrow = {
@@ -1223,6 +1376,7 @@ class DungeonTestScene extends Phaser.Scene {
         theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
         theDeath: definition.useEffectId === ITEM_EFFECT_THE_DEATH,
         theHermit: definition.useEffectId === ITEM_EFFECT_THE_HERMIT,
+        scalpel: definition.useEffectId === ITEM_EFFECT_SCALPEL,
       };
       this.inventoryUi.setVisible(false);
       this.closeInventoryMenu();
@@ -1528,7 +1682,11 @@ class DungeonTestScene extends Phaser.Scene {
         const tiles = [];
         for (let y = room.y; y < room.y + room.height; y += 1) {
           for (let x = room.x; x < room.x + room.width; x += 1) {
-            if (!this.isTileOccupied(x, y) && !this.isStairTile(x, y)) {
+            if (
+              this.isWalkableTile(this.dungeonTiles[y]?.[x])
+              && !this.isTileOccupied(x, y)
+              && !this.isStairTile(x, y)
+            ) {
               tiles.push({ x, y });
             }
           }
@@ -1564,6 +1722,7 @@ class DungeonTestScene extends Phaser.Scene {
       theMoon,
       theDeath,
       theHermit,
+      scalpel,
     } = this.pendingThrow;
     this.pendingThrow = null;
     if (fromFloor ? this.getFloorItemAt(this.heroTileX, this.heroTileY) !== item : !this.playerStatus.inventory.includes(item)) {
@@ -1579,11 +1738,11 @@ class DungeonTestScene extends Phaser.Scene {
       this.useTheMoon(item, definition, direction);
       return;
     }
-    if (sleepGas || volticlet || slowPowder || theDeath || theHermit) {
+    if (sleepGas || volticlet || slowPowder || theDeath || theHermit || scalpel) {
       this.playSfx('se-use');
     }
     this.playSfx('se-throw');
-    if (!sleepGas && !volticlet && !slowPowder && !theDeath && !theHermit) {
+    if (!sleepGas && !volticlet && !slowPowder && !theDeath && !theHermit && !scalpel) {
       this.removeInventoryOrFloorItem(item);
     }
     const throwResult = volticlet
@@ -1592,7 +1751,7 @@ class DungeonTestScene extends Phaser.Scene {
     const { destination, dropDestination = destination } = throwResult;
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
     this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
-    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder || theDeath || theHermit ? '撃った' : '投げた' });
+    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder || theDeath || theHermit || scalpel ? '撃った' : '投げた' });
     this.isHeroMoving = true;
     this.idleTween.stop();
     this.hero.setScale(HERO_SCALE);
@@ -1642,6 +1801,13 @@ class DungeonTestScene extends Phaser.Scene {
           if (this.consumeDeviceUse(item)) {
             this.removeInventoryOrFloorItem(item);
           }
+        } else if (scalpel) {
+          if (throwResult.enemy) {
+            this.applyThrownItemToEnemy(item, definition, throwResult.enemy);
+          }
+          if (this.consumeDeviceUse(item)) {
+            this.removeInventoryOrFloorItem(item);
+          }
         } else if (
           throwResult.enemy
           && !this.evadesProjectile(throwResult.enemy)
@@ -1677,7 +1843,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
-      if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         break;
       }
       destination = { x: tileX, y: tileY };
@@ -1751,10 +1917,13 @@ class DungeonTestScene extends Phaser.Scene {
   getRangedWeaponTarget(direction, piercesEnemies = false) {
     let destination = { x: this.heroTileX, y: this.heroTileY };
     const enemies = [];
-    for (let distance = 1; distance <= 10; distance += 1) {
+    const maximumRange = this.hasEquipEffect(ITEM_EQUIP_EFFECT_UNLIMITED_RANGED_RANGE)
+      ? Infinity
+      : 10;
+    for (let distance = 1; distance <= maximumRange; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
-      if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         break;
       }
       destination = { x: tileX, y: tileY };
@@ -1797,7 +1966,7 @@ class DungeonTestScene extends Phaser.Scene {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
       if (
-        !this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])
+        !this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])
         || this.getEnemyAt(tileX, tileY)
       ) {
         break;
@@ -1841,7 +2010,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
-      if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         break;
       }
       const enemy = this.getEnemyAt(tileX, tileY);
@@ -1884,6 +2053,7 @@ class DungeonTestScene extends Phaser.Scene {
       enemy.hasteText.destroy();
       enemy.slowText.destroy();
       enemy.paralysisText.destroy();
+      enemy.sealText?.destroy();
       this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
     });
   }
@@ -1969,6 +2139,7 @@ class DungeonTestScene extends Phaser.Scene {
           || definition.useEffectId === ITEM_EFFECT_THE_MOON
           || definition.useEffectId === ITEM_EFFECT_THE_DEATH
           || definition.useEffectId === ITEM_EFFECT_THE_HERMIT
+          || definition.useEffectId === ITEM_EFFECT_SCALPEL
         )
       )
     ) {
@@ -1982,6 +2153,7 @@ class DungeonTestScene extends Phaser.Scene {
         theMoon: definition.useEffectId === ITEM_EFFECT_THE_MOON,
         theDeath: definition.useEffectId === ITEM_EFFECT_THE_DEATH,
         theHermit: definition.useEffectId === ITEM_EFFECT_THE_HERMIT,
+        scalpel: definition.useEffectId === ITEM_EFFECT_SCALPEL,
       };
       this.throwPendingItem(Phaser.Utils.Array.GetRandom(MOVE_DIRECTIONS));
       return;
@@ -2006,7 +2178,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
-      if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         break;
       }
       destination = { x: tileX, y: tileY };
@@ -2031,16 +2203,17 @@ class DungeonTestScene extends Phaser.Scene {
     const damage = 5;
     this.playSfx('se-player-attack');
     this.applyEnemyDamage(enemy, damage);
-    this.actionLog.add('ITEM_THROW_DAMAGE', {
-      item: definition.name,
-      enemy: this.getEnemyLogName(enemy),
-      damage,
-    });
+    this.actionLog.add(
+      definition.useEffectId === ITEM_EFFECT_SCALPEL ? 'ITEM_SCALPEL_DAMAGE' : 'ITEM_THROW_DAMAGE',
+      definition.useEffectId === ITEM_EFFECT_SCALPEL
+        ? { enemy: this.getEnemyLogName(enemy), damage }
+        : { item: definition.name, enemy: this.getEnemyLogName(enemy), damage },
+    );
     this.warpEstersToDamagedEnemy(enemy);
-    if (this.applyEnemySurvivalAbility(enemy)) {
-      return;
-    }
-    if (enemy.hitPoints > 0) {
+    if (this.applyEnemySurvivalAbility(enemy) || enemy.hitPoints > 0) {
+      if (definition.useEffectId === ITEM_EFFECT_SCALPEL) {
+        this.applySealToEnemy(enemy);
+      }
       return;
     }
     this.applyEnemyDefeatDrop(enemy);
@@ -2065,6 +2238,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.hasteText.destroy();
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
+    enemy.sealText?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -2092,6 +2266,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.hasteText.destroy();
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
+    enemy.sealText?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -2126,6 +2301,7 @@ class DungeonTestScene extends Phaser.Scene {
       hasteText: enemy.hasteText,
       slowText: enemy.slowText,
       paralysisText: enemy.paralysisText,
+      sealText: enemy.sealText,
       status: null,
       sleepTurns: 0,
       confusionTurns: 0,
@@ -2157,6 +2333,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.hasteText.setVisible(false);
     enemy.slowText.setVisible(false);
     enemy.paralysisText.setVisible(false);
+    enemy.sealText?.setVisible(false);
     this.playSfx('se-level-up');
     this.actionLog.add('ENEMY_DEMOTED', {
       enemy: previousName,
@@ -2199,7 +2376,7 @@ class DungeonTestScene extends Phaser.Scene {
     });
   }
 
-  applyEnemySurvivalAbility(enemy) {
+  applyEnemySurvivalAbility(enemy, announce = true) {
     if (
       enemy.hitPoints > 0
       || enemy.hasUsedSurvivalAbility
@@ -2209,7 +2386,9 @@ class DungeonTestScene extends Phaser.Scene {
     }
     enemy.hitPoints = 1;
     enemy.hasUsedSurvivalAbility = true;
-    this.actionLog.add('ENEMY_SURVIVED', { enemy: this.getEnemyLogName(enemy) });
+    if (announce) {
+      this.actionLog.add('ENEMY_SURVIVED', { enemy: this.getEnemyLogName(enemy) });
+    }
     return true;
   }
 
@@ -2416,6 +2595,30 @@ class DungeonTestScene extends Phaser.Scene {
     return true;
   }
 
+  applySealToEnemy(enemy) {
+    if (!enemy.isSealed) {
+      enemy.sealedSpecialAbilityId = enemy.specialAbilityId;
+      enemy.specialAbilityId = null;
+      enemy.isSealed = true;
+    }
+    enemy.sealTurns = SEAL_TURN_COUNT;
+    this.actionLog.add('ENEMY_SEALED', { enemy: this.getEnemyLogName(enemy) });
+  }
+
+  advanceEnemySeal(enemy) {
+    if (!enemy.isSealed) {
+      return;
+    }
+    if (enemy.sealTurns <= 0) {
+      enemy.specialAbilityId = enemy.sealedSpecialAbilityId;
+      enemy.sealedSpecialAbilityId = null;
+      enemy.isSealed = false;
+      this.actionLog.add('ENEMY_SEAL_ENDED', { enemy: this.getEnemyLogName(enemy) });
+      return;
+    }
+    enemy.sealTurns -= 1;
+  }
+
   consumeDeviceUse(item) {
     item.usesRemaining -= 1;
     return item.usesRemaining <= 0;
@@ -2452,6 +2655,9 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   placeFloorItem(item, tileX, tileY) {
+    if (this.dungeonTiles[tileY]?.[tileX] === WATER_TILE) {
+      return false;
+    }
     if (this.isStairTile(tileX, tileY)) {
       return this.placeDroppedItem(item, tileX, tileY);
     }
@@ -2487,6 +2693,9 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   placeDroppedItem(item, tileX, tileY) {
+    if (this.dungeonTiles[tileY]?.[tileX] === WATER_TILE) {
+      return false;
+    }
     if (!this.hasStaticObjectAt(tileX, tileY)) {
       this.placeFloorItem(item, tileX, tileY);
       return true;
@@ -2788,6 +2997,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.hasteText.destroy();
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
+    enemy.sealText?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -3296,6 +3506,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   resolvePlayerTurn(moved, forcedSlowTurn = false) {
+    this.warpCharactersFromWater();
     this.floorTurn += 1;
     this.activateIsaacHayesInvasion();
     if (moved && !this.playerStatus.trapAvoidance) {
@@ -3449,10 +3660,22 @@ class DungeonTestScene extends Phaser.Scene {
         this.playSfx('se-player-attack');
       }
       this.applyEnemyDamage(enemy, damage);
-      this.actionLog.add(ranged ? 'PLAYER_RANGED_ATTACK' : 'PLAYER_ATTACK', {
-        enemy: this.getEnemyLogName(enemy),
-        damage,
-      });
+      if (!ranged) {
+        this.actionLog.add('PLAYER_ATTACK', {
+          enemy: this.getEnemyLogName(enemy),
+          damage,
+        });
+      }
+      const weapon = !ranged && this.playerStatus.inventory.find((item) => (
+        item.equipped === 0 && this.itemDefinitions.get(item.id)?.category === 0
+      ));
+      const additionalDamage = !ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_BLACK_FORMAL)
+        ? Math.ceil((this.itemDefinitions.get(weapon?.id)?.attack ?? 0) / 2)
+        : 0;
+      if (additionalDamage > 0) {
+        this.applyEnemyDamage(enemy, additionalDamage);
+        this.actionLog.add('ITEM_BLACK_FORMAL_DAMAGE', { damage: additionalDamage });
+      }
       if (
         !ranged
         && enemy.hitPoints > 0
@@ -3490,6 +3713,16 @@ class DungeonTestScene extends Phaser.Scene {
       this.playSfx('se-miss');
       this.actionLog.add('PLAYER_MISS', { enemy: this.getEnemyLogName(enemy) });
     }
+    const survived = hit && this.applyEnemySurvivalAbility(enemy, !ranged);
+    const delayedLogs = [];
+    const addHitLog = (key, values, effect = null) => {
+      if (ranged) {
+        delayedLogs.push({ key, values, effect });
+      } else {
+        effect?.();
+        this.actionLog.add(key, values);
+      }
+    };
     const attack = {
       sprite: this.hero,
       direction: { x: enemy.tileX - this.heroTileX, y: enemy.tileY - this.heroTileY },
@@ -3499,7 +3732,20 @@ class DungeonTestScene extends Phaser.Scene {
       attack.targetX = (enemy.tileX + 0.5) * TILE_SIZE;
       attack.targetY = (enemy.tileY + 0.5) * TILE_SIZE;
       if (hit) {
-        attack.onImpact = () => this.playSfx('se-player-attack');
+        attack.onImpact = () => {
+          this.playSfx('se-player-attack');
+          this.actionLog.add('PLAYER_RANGED_ATTACK', {
+            enemy: this.getEnemyLogName(enemy),
+            damage,
+          });
+          if (survived) {
+            this.actionLog.add('ENEMY_SURVIVED', { enemy: this.getEnemyLogName(enemy) });
+          }
+          delayedLogs.forEach(({ key, values, effect }) => {
+            effect?.();
+            this.actionLog.add(key, values);
+          });
+        };
       } else {
         attack.onImpact = () => {
           this.playSfx('se-miss');
@@ -3507,19 +3753,17 @@ class DungeonTestScene extends Phaser.Scene {
         };
       }
     }
-    const survived = hit && this.applyEnemySurvivalAbility(enemy);
     if (hit && !survived && enemy.hitPoints <= 0) {
       this.applyEnemyDefeatDrop(enemy);
       this.dropEnemyHeldItem(enemy);
       const levelsGained = this.playerStatus.gainExperience(enemy.experience);
       this.updateStatusUi();
-      this.actionLog.add('ENEMY_DEFEATED', {
+      addHitLog('ENEMY_DEFEATED', {
         enemy: this.getEnemyLogName(enemy),
         experience: enemy.experience,
       });
       levelsGained.forEach((level) => {
-        this.playSfx('se-level-up');
-        this.actionLog.add('LEVEL_UP', { level });
+        addHitLog('LEVEL_UP', { level }, () => this.playSfx('se-level-up'));
       });
       attack.onComplete = () => {
         enemy.sprite.destroy();
@@ -3532,7 +3776,10 @@ class DungeonTestScene extends Phaser.Scene {
         enemy.hasteText.destroy();
         enemy.slowText.destroy();
         enemy.paralysisText.destroy();
+        enemy.sealText?.destroy();
       };
+      enemy.sealText?.destroy();
+      enemy.sealText = null;
       this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
     }
     return attack;
@@ -3653,6 +3900,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   resolveEnemyTurn() {
+    this.warpCharactersFromWater();
     const movements = [];
     const attacks = [];
     const lumiMovement = this.resolveLumiTurn();
@@ -3669,6 +3917,7 @@ class DungeonTestScene extends Phaser.Scene {
       if (!this.enemies.includes(enemy)) {
         continue;
       }
+      this.advanceEnemySeal(enemy);
       if (enemy.disguised) {
         continue;
       }
@@ -3743,7 +3992,10 @@ class DungeonTestScene extends Phaser.Scene {
         const enteredMonsterHouse = this.monsterHouseRoom
           && this.enteredRoom === this.monsterHouseRoom
           && this.getRoomAt(enemy.tileX, enemy.tileY) === this.monsterHouseRoom;
-        if (enteredMonsterHouse || ((enteredEnemyRoom || this.isEnemyAdjacent(enemy)) && Math.random() < 0.5)) {
+        if (
+          !this.hasEquipEffect(ITEM_EQUIP_EFFECT_SILENT_MOVEMENT)
+          && (enteredMonsterHouse || ((enteredEnemyRoom || this.isEnemyAdjacent(enemy)) && Math.random() < 0.5))
+        ) {
           this.wakeEnemy(enemy);
         }
         this.advanceEnemyConfusion(enemy);
@@ -3902,7 +4154,9 @@ class DungeonTestScene extends Phaser.Scene {
         movements.push(lauraTheftAfterMovement);
         continue;
       }
-      const remainingAttacks = movesTaken === 0 ? this.getEnemyAttackCount(enemy) : 0;
+      const remainingAttacks = movesTaken === 0
+        ? this.getEnemyAttackCount(enemy)
+        : Math.max(0, this.getEnemyMovementCount(enemy) - movesTaken);
       if (
         !this.isMartinaSummoner(enemy)
         && remainingAttacks > 0
@@ -3970,7 +4224,7 @@ class DungeonTestScene extends Phaser.Scene {
     if (!pendingPull) {
       return;
     }
-    if (this.mithrilBootsActive) {
+    if (this.hasForcedMovementImmunity()) {
       this.applyAlonsoPull(pendingPull.enemy, pendingPull.destination, true);
       return;
     }
@@ -4014,11 +4268,16 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   preventEnemyForcedMovement() {
-    if (!this.mithrilBootsActive) {
+    if (!this.hasForcedMovementImmunity()) {
       return false;
     }
     this.actionLog.add('PLAYER_FORCED_MOVEMENT_IMMUNE');
     return true;
+  }
+
+  hasForcedMovementImmunity() {
+    return this.mithrilBootsActive
+      || this.hasEquipEffect(ITEM_EQUIP_EFFECT_FORCED_MOVEMENT_IMMUNITY);
   }
 
   playAlonsoPullEffect(enemy) {
@@ -4589,6 +4848,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.hasteText.destroy();
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
+    enemy.sealText?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -4712,7 +4972,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.enemyRespawnTurns = 0;
     this.spawnEnemy(this.isaacHayesInvasion ? {
       entries: [{ id: 900, weight: 1 }, { id: 901, weight: 1 }],
-    } : floorEnemies);
+    } : floorEnemies, null, false, null, 20);
   }
 
   activateIsaacHayesInvasion() {
@@ -4816,7 +5076,7 @@ class DungeonTestScene extends Phaser.Scene {
               }
             }
             const reflectedDamage = this.hasEquipEffect(ITEM_EQUIP_EFFECT_DAMAGE_REFLECTION)
-              ? Math.floor(actualDamage * 0.3)
+              ? Math.floor(actualDamage * 0.35)
               : 0;
             this.dashDirection = null;
             this.updateStatusUi();
@@ -4857,6 +5117,7 @@ class DungeonTestScene extends Phaser.Scene {
               enemy.hasteText.destroy();
               enemy.slowText.destroy();
               enemy.paralysisText.destroy();
+              enemy.sealText?.destroy();
             };
           } else {
             this.playSfx('se-miss');
@@ -5076,7 +5337,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let step = 1; step <= 10; step += 1) {
       const tileX = x + direction.x;
       const tileY = y + direction.y;
-      if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         break;
       }
       const collisionEnemy = this.getEnemyAt(tileX, tileY);
@@ -5111,6 +5372,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.applyHyunwooChargeDamage(enemy, collisionTarget, damage);
     }
     this.updateHeroDepth(this.heroTileY);
+    this.warpCharactersFromWater();
     this.updateStatusUi();
   }
 
@@ -5262,7 +5524,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let step = 1; step <= distance; step += 1) {
       const targetX = enemy.tileX + direction.x * step;
       const targetY = enemy.tileY + direction.y * step;
-      if (!this.isWalkableTile(this.dungeonTiles[targetY]?.[targetX])) {
+      if (!this.isProjectilePassableTile(this.dungeonTiles[targetY]?.[targetX])) {
         return null;
       }
       const interveningEnemy = this.getEnemyAt(targetX, targetY);
@@ -5576,6 +5838,7 @@ class DungeonTestScene extends Phaser.Scene {
     target.hasteText.destroy();
     target.slowText.destroy();
     target.paralysisText.destroy();
+    target.sealText?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== target);
     if (this.isJackie(attacker)) {
       attacker.attack += 5;
@@ -5713,8 +5976,18 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.sprite.setScale(ENEMY_SCALE);
     enemy.needsIdleMotion = true;
     enemy.patrolDirection = { x: nextX - enemy.tileX, y: nextY - enemy.tileY };
+    const previousTile = { x: enemy.tileX, y: enemy.tileY };
     enemy.tileX = nextX;
     enemy.tileY = nextY;
+    const room = this.getRoomAt(nextX, nextY);
+    if (this.dungeonTiles[previousTile.y]?.[previousTile.x] === CORRIDOR_TILE && room) {
+      const enteredCorridor = this.getConnectedCorridorTileKeys(previousTile.x, previousTile.y);
+      const availableExits = this.getRoomCorridorExits(room).filter((exit) => (
+        !enteredCorridor.has(`${exit.x},${exit.y}`)
+        && !this.isTileOccupied(exit.x, exit.y)
+      ));
+      enemy.patrolTarget = Phaser.Utils.Array.GetRandom(availableExits) || null;
+    }
     this.updateCharacterDepth(enemy.sprite, nextY);
     this.updateEnemySymbolDepth(enemy);
     return movement;
@@ -6385,14 +6658,23 @@ class DungeonTestScene extends Phaser.Scene {
       return null;
     }
 
-    const forwardStep = candidates.find((candidate) => (
+    const nonReversingCandidates = candidates.filter((candidate) => (
+      !enemy.patrolDirection
+      || candidate.direction.x !== -enemy.patrolDirection.x
+      || candidate.direction.y !== -enemy.patrolDirection.y
+    ));
+    const patrolCandidates = nonReversingCandidates.length > 0 ? nonReversingCandidates : candidates;
+    const forwardStep = patrolCandidates.find((candidate) => (
       candidate.direction.x === enemy.patrolDirection?.x
       && candidate.direction.y === enemy.patrolDirection?.y
     ));
-    const corridorStep = candidates.find((candidate) => (
+    const corridorCandidates = patrolCandidates.filter((candidate) => (
       this.dungeonTiles[candidate.y][candidate.x] === CORRIDOR_TILE
     ));
-    return forwardStep || corridorStep || Phaser.Utils.Array.GetRandom(candidates);
+    if (corridorCandidates.length > 1) {
+      return Phaser.Utils.Array.GetRandom(corridorCandidates);
+    }
+    return forwardStep || corridorCandidates[0] || Phaser.Utils.Array.GetRandom(patrolCandidates);
   }
 
   findAvailablePatrolStep(enemy) {
@@ -6510,8 +6792,8 @@ class DungeonTestScene extends Phaser.Scene {
     if (offsetX === 0 || offsetY === 0) {
       return true;
     }
-    return this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX + offsetX])
-      && this.isWalkableTile(this.dungeonTiles[tileY + offsetY]?.[tileX]);
+    return this.isDiagonalPassableTile(this.dungeonTiles[tileY]?.[tileX + offsetX])
+      && this.isDiagonalPassableTile(this.dungeonTiles[tileY + offsetY]?.[tileX]);
   }
 
   hasCorridorBranch(tileX, tileY) {
@@ -6560,7 +6842,7 @@ class DungeonTestScene extends Phaser.Scene {
   canEnemyMoveDiagonally(enemy, offsetX, offsetY) {
     const horizontalTile = this.dungeonTiles[enemy.tileY]?.[enemy.tileX + offsetX];
     const verticalTile = this.dungeonTiles[enemy.tileY + offsetY]?.[enemy.tileX];
-    return this.isWalkableTile(horizontalTile) && this.isWalkableTile(verticalTile);
+    return this.isDiagonalPassableTile(horizontalTile) && this.isDiagonalPassableTile(verticalTile);
   }
 
   isTileOccupied(tileX, tileY) {
@@ -6577,6 +6859,14 @@ class DungeonTestScene extends Phaser.Scene {
     return tile === FLOOR_TILE || tile === CORRIDOR_TILE;
   }
 
+  isProjectilePassableTile(tile) {
+    return this.isWalkableTile(tile) || tile === WATER_TILE;
+  }
+
+  isDiagonalPassableTile(tile) {
+    return this.isWalkableTile(tile) || tile === WATER_TILE;
+  }
+
   canMoveDiagonally(offsetX, offsetY) {
     if (offsetX === 0 || offsetY === 0) {
       return true;
@@ -6584,7 +6874,7 @@ class DungeonTestScene extends Phaser.Scene {
 
     const horizontalTile = this.dungeonTiles[this.heroTileY]?.[this.heroTileX + offsetX];
     const verticalTile = this.dungeonTiles[this.heroTileY + offsetY]?.[this.heroTileX];
-    return this.isWalkableTile(horizontalTile) && this.isWalkableTile(verticalTile);
+    return this.isDiagonalPassableTile(horizontalTile) && this.isDiagonalPassableTile(verticalTile);
   }
 
 }

@@ -4,6 +4,8 @@ class DungeonRenderer {
     this.tileSize = options.tileSize;
     this.floorTile = options.floorTile;
     this.corridorTile = options.corridorTile;
+    this.waterTile = options.waterTile;
+    this.waterKey = options.waterKey;
     this.decorationChance = options.decorationChance;
     this.chunkSize = options.chunkSize;
     this.marginX = options.marginX;
@@ -48,8 +50,12 @@ class DungeonRenderer {
         const tileY = startY + y;
         const tileX = startX + x;
         const tile = this.tiles[tileY]?.[tileX];
-        const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
-        texture.drawFrame(this.mapChipKey, frame, x * this.tileSize, y * this.tileSize);
+        if (tile === this.waterTile) {
+          texture.draw(this.waterKey, x * this.tileSize, y * this.tileSize);
+        } else {
+          const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
+          texture.drawFrame(this.mapChipKey, frame, x * this.tileSize, y * this.tileSize);
+        }
       }
     }
     this.mapChunks.set(key, texture);
@@ -65,20 +71,19 @@ class DungeonRenderer {
         updatedTiles.add(`${x},${y}`);
       });
     });
+    const updatedChunks = new Set();
     updatedTiles.forEach((key) => {
       const [x, y] = key.split(',').map(Number);
       const tile = this.tiles[y][x];
       const frame = this.getMapChipFrame(this.tiles, x, y, tile);
       const chunkX = Math.floor(x / this.chunkSize);
       const chunkY = Math.floor(y / this.chunkSize);
-      const texture = this.mapChunks.get(`${chunkX},${chunkY}`);
       this.mapFrames[y][x] = frame;
-      texture?.drawFrame(
-        this.mapChipKey,
-        frame,
-        (x - chunkX * this.chunkSize) * this.tileSize,
-        (y - chunkY * this.chunkSize) * this.tileSize,
-      );
+      updatedChunks.add(`${chunkX},${chunkY}`);
+    });
+    updatedChunks.forEach((key) => {
+      const [chunkX, chunkY] = key.split(',').map(Number);
+      this.createMapChunk(chunkX, chunkY);
     });
   }
 
@@ -87,6 +92,6 @@ class DungeonRenderer {
       return Math.random() < this.decorationChance ? 3 : 2;
     }
     const tileBelow = tiles[y + 1]?.[x];
-    return tileBelow === this.floorTile || tileBelow === this.corridorTile ? 1 : 0;
+    return tileBelow === this.floorTile || tileBelow === this.corridorTile || tileBelow === this.waterTile ? 1 : 0;
   }
 }

@@ -5,6 +5,7 @@ const DUNGEON_CLEAR_STORAGE_KEY = 'lumia-underground-labyrinth-cleared-dungeons'
 const DUNGEON_CLEAR_DISPLAYS = [
   { file: 'dungeon-0001.dat', label: 'ルミア島の地下迷宮 踏破', imageKey: 'dungeon-clear-rul', imageFile: 'IconClearRUL.png' },
   { file: 'dungeon-0002.dat', label: 'ホテル裏の下り階段 踏破', imageKey: 'dungeon-clear-hd', imageFile: 'IconClearHD.png' },
+  { file: 'dungeon-0003.dat', label: '地下迷宮のさらに先 踏破', imageKey: 'dungeon-clear-lb', imageFile: 'IconClearLB.png' },
 ];
 const PLAYER_SKINS = [
   { key: 'player-skin-default', file: 'Chara0001.png', label: 'デフォルト' },
@@ -204,6 +205,7 @@ class TitleScene extends Phaser.Scene {
         frameHeight: TILE_SIZE,
       });
     });
+    this.load.image('water', 'assets/image/Water.png');
     DUNGEON_CLEAR_DISPLAYS.forEach(({ imageKey, imageFile }) => this.load.image(imageKey, `assets/image/${imageFile}`));
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
@@ -221,12 +223,14 @@ class TitleScene extends Phaser.Scene {
   }
 
   createDungeonBackground() {
-    const dungeon = new DungeonGenerator().generate();
+    const dungeon = new DungeonGenerator().generate({ waterChance: 15 });
     const mapChipNumber = Phaser.Math.Between(1, 5);
     const renderer = new DungeonRenderer(this, {
       tileSize: TILE_SIZE,
       floorTile: FLOOR_TILE,
       corridorTile: CORRIDOR_TILE,
+      waterTile: WATER_TILE,
+      waterKey: 'water',
       decorationChance: FLOOR_DECORATION_CHANCE,
       chunkSize: MAP_CHUNK_SIZE,
       marginX: OUTER_WALL_MARGIN_X,
@@ -480,7 +484,7 @@ class TitleScene extends Phaser.Scene {
     ];
     this.completionTitleDisplayObjects = titles
       .flatMap(({ label, imageKey, complete }, index) => {
-        const y = 112 + index * 42;
+        const y = 28 + (DUNGEON_CLEAR_DISPLAYS.length + index) * 42;
         const crown = this.createTitleCrown(y, complete ? 0x3f3108 : 0x000000);
         if (!complete) {
           return [crown];

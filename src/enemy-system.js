@@ -43,6 +43,7 @@ const EnemySystem = {
     ).setOrigin(0.5, 1).setDisplaySize(ENEMY_DISPLAY_SIZE, ENEMY_DISPLAY_SIZE);
     this.updateCharacterDepth(sprite, position.y);
     this.lumi = { tileX: position.x, tileY: position.y, sprite };
+    this.clearWaterInRoom(this.getRoomAt(position.x, position.y));
     this.updateLumiVisibility(this.getVisibleTiles(this.heroTileX, this.heroTileY));
   },
 
@@ -56,7 +57,7 @@ const EnemySystem = {
       const tiles = [];
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (!this.isStairTile(x, y)) {
+          if (this.isWalkableTile(this.dungeonTiles[y]?.[x]) && !this.isStairTile(x, y)) {
             tiles.push({ x, y });
           }
         }
@@ -103,7 +104,7 @@ const EnemySystem = {
     return true;
   },
 
-  spawnEnemy(floorEnemies, position = null, startsAwake = false, excludedImageFile = null) {
+  spawnEnemy(floorEnemies, position = null, startsAwake = false, excludedImageFile = null, minimumSpawnDistance = 0) {
     const entries = floorEnemies.entries.filter((entry) => (
       this.enemyDefinitions.find((enemy) => enemy.id === entry.id)?.imageFile !== excludedImageFile
     ));
@@ -112,8 +113,26 @@ const EnemySystem = {
     if (!spawnPosition) {
       const heroRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
       const availableRooms = this.dungeonRooms.filter((room) => room !== heroRoom);
-      const room = this.getInitialRandomItem(availableRooms);
-      spawnPosition = room && this.findOpenTileInRoom(room);
+      if (minimumSpawnDistance > 0) {
+        const candidates = availableRooms.flatMap((room) => {
+          const tiles = [];
+          for (let y = room.y; y < room.y + room.height; y += 1) {
+            for (let x = room.x; x < room.x + room.width; x += 1) {
+              if (
+                !this.getEnemyAt(x, y)
+                && Math.max(Math.abs(x - this.heroTileX), Math.abs(y - this.heroTileY)) > minimumSpawnDistance
+              ) {
+                tiles.push({ x, y });
+              }
+            }
+          }
+          return tiles;
+        });
+        spawnPosition = this.getInitialRandomItem(candidates);
+      } else {
+        const room = this.getInitialRandomItem(availableRooms);
+        spawnPosition = room && this.findOpenTileInRoom(room);
+      }
     }
     if (!definition || !spawnPosition) {
       return false;
@@ -225,6 +244,13 @@ const EnemySystem = {
       stroke: '#17212a',
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(sprite.depth + 1).setVisible(false);
+    enemy.sealText = this.add.text(sprite.x + 34, sprite.y - 90, '封', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '24px',
+      color: '#f3f1e8',
+      stroke: '#17212a',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(sprite.depth + 1).setVisible(false);
     const visible = this.getVisibleTiles(this.heroTileX, this.heroTileY)
       .has(`${spawnPosition.x},${spawnPosition.y}`);
     enemy.sprite.setVisible(visible);
@@ -260,7 +286,11 @@ const EnemySystem = {
     const candidates = [];
     for (let y = room.y; y < room.y + room.height; y += 1) {
       for (let x = room.x; x < room.x + room.width; x += 1) {
-        if ((x !== this.heroTileX || y !== this.heroTileY) && !this.getEnemyAt(x, y)) {
+        if (
+          this.isWalkableTile(this.dungeonTiles[y]?.[x])
+          && (x !== this.heroTileX || y !== this.heroTileY)
+          && !this.getEnemyAt(x, y)
+        ) {
           candidates.push({ x, y });
         }
       }

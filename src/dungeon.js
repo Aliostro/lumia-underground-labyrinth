@@ -10,10 +10,10 @@ class DungeonGenerator {
     this.maxRooms = 12;
   }
 
-  generate() {
+  generate(options = {}) {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       try {
-        const dungeon = this.createDungeon();
+        const dungeon = this.createDungeon(options.waterChance ?? 0);
         if (this.areRoomsConnected(dungeon)) {
           return dungeon;
         }
@@ -25,7 +25,7 @@ class DungeonGenerator {
     throw new Error('ダンジョンの生成に失敗しました。');
   }
 
-  createDungeon() {
+  createDungeon(waterChance) {
     const tiles = Array.from(
       { length: this.height },
       () => Array(this.width).fill(0),
@@ -50,7 +50,103 @@ class DungeonGenerator {
       connectedRooms.push(nextRoom);
     }
 
+    this.placeWater(tiles, rooms, waterChance);
     return { tiles, rooms };
+  }
+
+  placeWater(tiles, rooms, waterChance) {
+    for (const room of rooms) {
+      if (this.random() * 100 >= waterChance) {
+        continue;
+      }
+      const candidates = [];
+      for (let y = room.y; y < room.y + room.height; y += 1) {
+        for (let x = room.x; x < room.x + room.width; x += 1) {
+          if (this.isWaterCandidate(tiles, x, y)) {
+            candidates.push({ x, y });
+          }
+        }
+      }
+      const start = candidates.length > 0 ? candidates[this.randomInt(0, candidates.length - 1)] : null;
+      if (!start) {
+        continue;
+      }
+      const waterTiles = [start];
+      const targetCount = this.randomInt(3, 5);
+      for (let index = 0; index < waterTiles.length && waterTiles.length < targetCount; index += 1) {
+        const tile = waterTiles[index];
+        const neighbors = [[0, -1], [1, 0], [0, 1], [-1, 0]]
+          .map(([offsetX, offsetY]) => ({ x: tile.x + offsetX, y: tile.y + offsetY }))
+          .filter((neighbor) => this.isWaterCandidate(tiles, neighbor.x, neighbor.y))
+          .filter((neighbor) => !waterTiles.some((water) => water.x === neighbor.x && water.y === neighbor.y));
+        this.shuffle(neighbors);
+        waterTiles.push(...neighbors.slice(0, targetCount - waterTiles.length));
+      }
+      if (waterTiles.length < 3) {
+        continue;
+      }
+      if (!this.keepsRoomAccessible(tiles, room, waterTiles)) {
+        continue;
+      }
+      waterTiles.forEach((tile) => {
+        tiles[tile.y][tile.x] = 3;
+      });
+    }
+  }
+
+  isWaterCandidate(tiles, tileX, tileY) {
+    return tiles[tileY]?.[tileX] === 1
+      && ![[0, -1], [1, 0], [0, 1], [-1, 0]].some(([offsetX, offsetY]) => (
+        tiles[tileY + offsetY]?.[tileX + offsetX] === 2
+      ));
+  }
+
+  keepsRoomAccessible(tiles, room, waterTiles) {
+    const waterKeys = new Set(waterTiles.map((tile) => `${tile.x},${tile.y}`));
+    const roomTiles = [];
+    const entrances = [];
+    for (let y = room.y; y < room.y + room.height; y += 1) {
+      for (let x = room.x; x < room.x + room.width; x += 1) {
+        if (tiles[y][x] !== 1 || waterKeys.has(`${x},${y}`)) {
+          continue;
+        }
+        const tile = { x, y };
+        roomTiles.push(tile);
+        if ([[0, -1], [1, 0], [0, 1], [-1, 0]].some(([offsetX, offsetY]) => (
+          tiles[y + offsetY]?.[x + offsetX] === 2
+        ))) {
+          entrances.push(tile);
+        }
+      }
+    }
+    const start = entrances[0] || roomTiles[0];
+    if (!start) {
+      return false;
+    }
+    const visited = new Set([`${start.x},${start.y}`]);
+    const queue = [start];
+    for (let index = 0; index < queue.length; index += 1) {
+      const tile = queue[index];
+      for (const [offsetX, offsetY] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+        const x = tile.x + offsetX;
+        const y = tile.y + offsetY;
+        const key = `${x},${y}`;
+        if (
+          visited.has(key)
+          || waterKeys.has(key)
+          || tiles[y]?.[x] !== 1
+          || x < room.x
+          || x >= room.x + room.width
+          || y < room.y
+          || y >= room.y + room.height
+        ) {
+          continue;
+        }
+        visited.add(key);
+        queue.push({ x, y });
+      }
+    }
+    return roomTiles.every((tile) => visited.has(`${tile.x},${tile.y}`));
   }
 
   createRooms() {

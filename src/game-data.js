@@ -101,15 +101,18 @@ class GameData {
     const startLevel = Number(data.match(/^start-level\s*=\s*(\d+)/m)?.[1]) || 1;
     const startFloor = Number(data.match(/^start-floor\s*=\s*(\d+)/m)?.[1]) || 1;
     const startItems = (data.match(/^start-item\s*=\s*(.+)$/m)?.[1] || '')
-      .split(',')
+      .split(/[,、]/)
       .map((itemId) => Number(itemId.trim()))
       .filter(Number.isInteger);
     const designMap = new Map();
     const designMapSection = data.split('[design-map]')[1]?.split('[enemy-map]')[0] || '';
     designMapSection.trim().split(/\r?\n/).forEach((line) => {
-      const match = line.match(/^(\d+):\s*(\d+)\s*$/);
+      const match = line.match(/^(\d+):\s*(\d+)(?:\s*\[(\d+)\])?\s*$/);
       if (match) {
-        designMap.set(Number(match[1]), Number(match[2]));
+        designMap.set(Number(match[1]), {
+          mapChipNumber: Number(match[2]),
+          waterChance: Math.min(100, Number(match[3]) || 0),
+        });
       }
     });
     const enemyMap = new Map();
