@@ -200,13 +200,13 @@ const InventoryUiBehavior = {
         text.setText('').setVisible(false);
         return;
       }
+      const resultDefinition = this.itemDefinitions.get(recipe.resultItemId);
       const recipeDefinition = recipeDefinitions.find((definition) => (
         this.getRecipeResultDefinition(definition)?.id === recipe.resultItemId
-      ));
+      )) ?? (resultDefinition?.category === 80 ? resultDefinition : null);
       const recipeRegistered = recipeDefinition && registeredRecipeIds.has(recipeDefinition.id);
       const materialId = recipe.materialIds.find((id) => id !== selectedDefinition.id) ?? selectedDefinition.id;
       const materialDefinition = this.itemDefinitions.get(materialId);
-      const resultDefinition = this.itemDefinitions.get(recipe.resultItemId);
       const oneLineLabel = recipeRegistered && materialDefinition && resultDefinition
         ? `+ ${materialDefinition.name} = ${resultDefinition.name}`
         : '+ ??? = ???';
