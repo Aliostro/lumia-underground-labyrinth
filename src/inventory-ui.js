@@ -1,6 +1,6 @@
 const InventoryUiBehavior = {
   createInventoryUi() {
-    const panelWidth = 760;
+    const panelWidth = 1080;
     const panelHeight = 580;
     const panelX = (GAME_WIDTH - panelWidth) / 2;
     const panelY = (GAME_HEIGHT - panelHeight) / 2;
@@ -16,7 +16,7 @@ const InventoryUiBehavior = {
       fontSize: '28px',
       color: '#f3f1e8',
     });
-    const capacity = this.add.text(panelX + 620, panelY + 26, '0 / 20', {
+    const capacity = this.add.text(panelX + 580, panelY + 26, '0 / 20', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#b7c6d3',
@@ -45,9 +45,20 @@ const InventoryUiBehavior = {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#cdd8df',
-      wordWrap: { width: panelWidth - 60, useAdvancedWrap: true },
+      wordWrap: { width: 660, useAdvancedWrap: true },
       lineSpacing: 6,
     });
+    this.inventoryCraftGraphics = this.add.graphics();
+    this.inventoryCraftTitleText = this.add.text(panelX + 750, panelY + 30, '作れるもの', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '22px',
+      color: '#ffdc4a',
+    });
+    this.inventoryCraftTexts = Array.from({ length: 14 }, () => this.add.text(0, 0, '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '16px',
+      color: '#f3f1e8',
+    }));
     this.inventoryCapacityText = capacity;
     this.inventoryPage = 0;
     this.selectedInventoryIndex = 0;
@@ -61,6 +72,9 @@ const InventoryUiBehavior = {
       ...this.inventoryRecipeResultIcons,
       ...this.inventoryItemTexts,
       this.inventoryDescriptionText,
+      this.inventoryCraftGraphics,
+      this.inventoryCraftTitleText,
+      ...this.inventoryCraftTexts,
     ])
       .setScrollFactor(0)
       .setDepth(INVENTORY_DEPTH)
@@ -87,9 +101,8 @@ const InventoryUiBehavior = {
   },
 
   refreshInventoryUi() {
-    const panelX = (GAME_WIDTH - 760) / 2;
-    const panelY = (GAME_HEIGHT - 580) / 2;
-    const slotWidth = 700;
+    const { panelX, panelY } = this.inventoryPanel;
+    const slotWidth = 660;
     const slotHeight = 38;
     const slotStartX = panelX + 30;
     const slotStartY = panelY + 82;
@@ -162,7 +175,56 @@ const InventoryUiBehavior = {
     this.inventoryDescriptionText.setText(selectedRecipeResult
       ? `${description}\n“${selectedRecipeResult.description}”`
       : description);
+    this.refreshCraftableItemList(selectedDefinition, registeredRecipeIds);
     this.refreshInventoryBorder();
+  },
+
+  refreshCraftableItemList(selectedDefinition, registeredRecipeIds) {
+    const { panelX, panelY } = this.inventoryPanel;
+    const listX = panelX + 750;
+    const listY = panelY + 82;
+    const listWidth = 300;
+    const singleLineHeight = 28;
+    const doubleLineHeight = 48;
+    let currentY = listY;
+    this.inventoryCraftGraphics.clear();
+    this.inventoryCraftGraphics.lineStyle(1, 0x607785, 1);
+    this.inventoryCraftGraphics.lineBetween(panelX + 720, panelY + 22, panelX + 720, panelY + 556);
+    const craftables = selectedDefinition
+      ? [...this.craftDefinitions.values()].filter((recipe) => recipe.materialIds.includes(selectedDefinition.id))
+      : [];
+    const recipeDefinitions = [...this.itemDefinitions.values()].filter((definition) => definition.category === 80);
+    this.inventoryCraftTexts.forEach((text, index) => {
+      const recipe = craftables[index];
+      if (!recipe) {
+        text.setText('').setVisible(false);
+        return;
+      }
+      const recipeDefinition = recipeDefinitions.find((definition) => (
+        this.getRecipeResultDefinition(definition)?.id === recipe.resultItemId
+      ));
+      const recipeRegistered = recipeDefinition && registeredRecipeIds.has(recipeDefinition.id);
+      const materialId = recipe.materialIds.find((id) => id !== selectedDefinition.id) ?? selectedDefinition.id;
+      const materialDefinition = this.itemDefinitions.get(materialId);
+      const resultDefinition = this.itemDefinitions.get(recipe.resultItemId);
+      const oneLineLabel = recipeRegistered && materialDefinition && resultDefinition
+        ? `+ ${materialDefinition.name} = ${resultDefinition.name}`
+        : '+ ??? = ???';
+      text.setText(oneLineLabel);
+      const wraps = recipeRegistered && text.width > listWidth - 20;
+      const label = wraps
+        ? `+ ${materialDefinition.name}\n    = ${resultDefinition.name}`
+        : oneLineLabel;
+      const rowHeight = wraps ? doubleLineHeight : singleLineHeight;
+      const y = currentY;
+      this.inventoryCraftGraphics.fillStyle(0x1c2932, 1);
+      this.inventoryCraftGraphics.fillRect(listX - 10, y - 4, listWidth, rowHeight - 3);
+      this.inventoryCraftGraphics.lineStyle(1, 0x607785, 1);
+      this.inventoryCraftGraphics.strokeRect(listX - 10, y - 4, listWidth, rowHeight - 3);
+      text.setPosition(listX, y + 1).setText(label).setVisible(true);
+      text.setColor(recipeRegistered ? '#f3f1e8' : '#7f8c95');
+      currentY += rowHeight;
+    });
   },
 
   getRecipeResultDefinition(recipeDefinition) {
@@ -242,8 +304,7 @@ const InventoryUiBehavior = {
   },
 
   refreshInventoryMenu() {
-    const panelX = (GAME_WIDTH - 760) / 2;
-    const panelY = (GAME_HEIGHT - 580) / 2;
+    const { panelX, panelY } = this.inventoryPanel;
     this.inventoryMenuGraphics.clear();
     this.inventoryMenuTexts.forEach((text, index) => {
       const selected = index === this.selectedInventoryMenuIndex;
