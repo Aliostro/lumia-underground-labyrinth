@@ -612,6 +612,14 @@ class DungeonTestScene extends Phaser.Scene {
     if (!floorItems) {
       return;
     }
+    const guaranteedItemId = this.getInitialRandomItem(floorItems.guaranteedItemIds);
+    if (guaranteedItemId !== null) {
+      const position = this.findOpenFloorItemTile();
+      if (!position) {
+        return;
+      }
+      this.placeFloorItem({ id: guaranteedItemId }, position.x, position.y);
+    }
     const itemCount = this.getInitialRandomInteger(floorItems.minimumItems, floorItems.maximumItems);
     for (let index = 0; index < itemCount; index += 1) {
       const item = this.chooseFloorItem(floorItems.entries);
@@ -756,7 +764,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     const heroInWater = this.dungeonTiles[this.heroTileY]?.[this.heroTileX] === WATER_TILE;
     const enemiesInWater = this.enemies.filter((enemy) => (
-      this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE
+      this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE && !this.isEva(enemy)
     ));
     if (!heroInWater && enemiesInWater.length === 0) {
       return;
@@ -798,7 +806,7 @@ class DungeonTestScene extends Phaser.Scene {
       }
     }
     this.enemies.forEach((enemy) => {
-      if (this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE) {
+      if (this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE || this.isEva(enemy)) {
         return;
       }
       const destination = Phaser.Utils.Array.GetRandom(findDestination(enemy));
@@ -3293,6 +3301,7 @@ class DungeonTestScene extends Phaser.Scene {
     const currentRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
     const nextRoom = this.getRoomAt(nextX, nextY);
     const isDashing = this.dashDirection != null;
+    const isWaterEva = destination === WATER_TILE && this.isEva(enemy);
 
     if (
       destination === 0
@@ -3328,7 +3337,10 @@ class DungeonTestScene extends Phaser.Scene {
       return;
     }
 
-    if (!this.isWalkableTile(destination) || !this.canMoveDiagonally(offsetX, offsetY)) {
+    if (
+      (!this.isWalkableTile(destination) && !isWaterEva)
+      || !this.canMoveDiagonally(offsetX, offsetY)
+    ) {
       this.dashDirection = null;
       if (consumesBlockedMove) {
         this.isHeroMoving = true;

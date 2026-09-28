@@ -145,11 +145,11 @@ class GameData {
     });
 
     itemMapSection.trim().split(/\r?\n/).forEach((line) => {
-      const match = line.match(/^(\d+):\s*\[(\d+)-(\d+)\]\s+(?:([ox])(\d+)-(\d+)\s+)?(.+)$/);
+      const match = line.match(/^(\d+):\s*\[(\d+)-(\d+)\]\s*(?:\{([\d\s,]+)\}\s*)?(?:([ox])(\d+)-(\d+)\s*)?(?:\{([\d\s,]+)\}\s*)?(.+)$/);
       if (!match) {
         return;
       }
-      const entries = match[7].split(',').map((entry) => {
+      const entries = match[9].split(',').map((entry) => {
         const [id, weight] = entry.trim().split('^').map(Number);
         return { id, weight };
       });
@@ -160,9 +160,13 @@ class GameData {
       itemMap.set(Number(match[1]), {
         minimumItems: Number(match[2]),
         maximumItems: Number(match[3]),
-        recipeDropEnabled: match[4] === 'o',
-        minimumRecipeItems: match[4] === 'o' ? Number(match[5]) : 0,
-        maximumRecipeItems: match[4] === 'o' ? Number(match[6]) : 0,
+        guaranteedItemIds: [match[4], match[8]]
+          .filter(Boolean)
+          .flatMap((itemIds) => itemIds.split(',').map((itemId) => Number(itemId.trim())))
+          .filter(Number.isInteger),
+        recipeDropEnabled: match[5] === 'o',
+        minimumRecipeItems: match[5] === 'o' ? Number(match[6]) : 0,
+        maximumRecipeItems: match[5] === 'o' ? Number(match[7]) : 0,
         entries,
       });
     });
