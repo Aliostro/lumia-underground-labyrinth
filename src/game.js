@@ -430,6 +430,10 @@ class DungeonTestScene extends Phaser.Scene {
         this.queueParalysisTurn();
         return;
       }
+      if (!this.inventoryUi.visible && this.playerStatus.slowTurns > 0 && this.playerStatus.slowSkipNextTurn) {
+        this.queueSlowTurn();
+        return;
+      }
       if (this.pendingThrow && event.code === 'KeyX') {
         this.playSfx('se-cursor-cancel');
         this.pendingThrow = null;
@@ -1853,7 +1857,10 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('PLAYER_HASTE_ENDED');
         return;
       }
-      if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_IMMUNITY)) {
+      if (
+        this.playerStatus.slowTurns > 0
+        || this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_IMMUNITY)
+      ) {
         return;
       }
       this.playerStatus.slowTurns = SLOW_TURN_COUNT;
@@ -4537,6 +4544,9 @@ class DungeonTestScene extends Phaser.Scene {
       if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
         return false;
       }
+      if (step < distance && this.getEnemyAt(tileX, tileY)) {
+        return false;
+      }
     }
     const destination = this.findHeroShortestPathStep(enemy);
     if (!destination) {
@@ -4558,12 +4568,17 @@ class DungeonTestScene extends Phaser.Scene {
     this.setHeroEnteredRoom(this.getRoomAt(destination.x, destination.y));
     this.updateVisibility();
     this.drawMinimapMarker();
-    this.playerStatus.slowTurns = SLOW_TURN_COUNT;
-    this.playerStatus.slowSkipNextTurn = true;
+    const playerWasSlowed = this.playerStatus.slowTurns > 0;
+    if (!playerWasSlowed) {
+      this.playerStatus.slowTurns = SLOW_TURN_COUNT;
+      this.playerStatus.slowSkipNextTurn = true;
+    }
     this.playSfx('se-water');
     this.playEnemyWarpSfx();
     this.actionLog.add('ENEMY_LENOX_CAUGHT', { enemy: this.getEnemyLogName(enemy) });
-    this.actionLog.add('PLAYER_SLOWED');
+    if (!playerWasSlowed) {
+      this.actionLog.add('PLAYER_SLOWED');
+    }
     return true;
   }
 

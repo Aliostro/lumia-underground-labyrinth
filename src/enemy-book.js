@@ -7,6 +7,8 @@ class EnemyBook {
     'Chara0047a.png',
     'Chara0048.png',
     'Chara0049.png',
+    'Chara0050.png',
+    'Chara0051.png',
     'Chara9000.png',
     'Chara9001.png',
   ];
