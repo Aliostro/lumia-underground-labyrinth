@@ -51,10 +51,11 @@ class EnemyBook {
     this.scene = scene;
     this.enemyDefinitions = enemyDefinitions;
     this.enemyBookDescriptions = enemyBookDescriptions;
-    this.selectedIndex = 0;
-    this.page = 0;
+    this.selectedGroupIndex = 0;
+    this.selectedEnemyIndex = 0;
+    this.focusedColumn = 'groups';
     this.rowsPerPage = 12;
-    const panelWidth = 1100;
+    const panelWidth = 1200;
     const panelHeight = 620;
     const panelX = (GAME_WIDTH - panelWidth) / 2;
     const panelY = (GAME_HEIGHT - panelHeight) / 2;
@@ -66,39 +67,82 @@ class EnemyBook {
     this.countText = scene.add.text(panelX + 440, panelY + 28, '', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#b7c6d3',
     });
-    this.rowGraphics = scene.add.graphics();
-    this.rowTexts = Array.from({ length: this.rowsPerPage }, () => scene.add.text(0, 0, '', {
+    this.groupTitle = scene.add.text(panelX + 24, panelY + 58, '種類', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#9ab5c7',
+    });
+    this.enemyTitle = scene.add.text(panelX + 305, panelY + 58, '実験体', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#9ab5c7',
+    });
+    this.groupPageText = scene.add.text(panelX + 151, panelY + 557, '', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '16px', color: '#9ab5c7',
+    }).setOrigin(0.5);
+    this.groupGraphics = scene.add.graphics();
+    this.enemyGraphics = scene.add.graphics();
+    this.groupTexts = Array.from({ length: this.rowsPerPage }, () => scene.add.text(0, 0, '', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#f3f1e8',
+    }));
+    this.enemyTexts = Array.from({ length: this.rowsPerPage }, () => scene.add.text(0, 0, '', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '20px', color: '#f3f1e8',
     }));
     this.detailGraphics = scene.add.graphics();
-    this.enemyImage = scene.add.image(panelX + 825, panelY + 268, EnemyBook.IMAGE_FILES[0])
+    this.enemyImage = scene.add.image(panelX + 895, panelY + 268, EnemyBook.IMAGE_FILES[0])
       .setDisplaySize(176, 176).setVisible(false);
-    this.symbolImage = scene.add.image(panelX + 902, panelY + 180, EnemyBook.SYMBOL_FILES[0])
+    this.symbolImage = scene.add.image(panelX + 972, panelY + 180, EnemyBook.SYMBOL_FILES[0])
       .setDisplaySize(54, 54).setVisible(false);
-    this.detailName = scene.add.text(panelX + 825, panelY + 64, '', {
+    this.detailName = scene.add.text(panelX + 895, panelY + 64, '', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '28px', color: '#ffdc4a',
     }).setOrigin(0.5, 0);
-    this.statusText = scene.add.text(panelX + 570, panelY + 386, '', {
+    this.statusText = scene.add.text(panelX + 640, panelY + 386, '', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#f3f1e8',
-      align: 'left', lineSpacing: 4, wordWrap: { width: 500, useAdvancedWrap: true },
+      align: 'left', lineSpacing: 4, wordWrap: { width: 530, useAdvancedWrap: true },
     });
-    const hint = scene.add.text(GAME_WIDTH / 2, panelY + panelHeight - 30, '上下キー: 選択    左右キー: ページ    Xキー: 戻る', {
+    const hint = scene.add.text(GAME_WIDTH / 2, panelY + panelHeight - 30, '種類: 上下キーで選択 / 左右キーでページ    Zキー: 個体選択    Xキー: 戻る', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#9ab5c7',
     }).setOrigin(0.5);
     this.container = scene.add.container(0, 0, [
-      background, title, this.countText, this.rowGraphics, ...this.rowTexts, this.detailGraphics,
+      background, title, this.countText, this.groupTitle, this.enemyTitle, this.groupPageText,
+      this.groupGraphics, this.enemyGraphics, ...this.groupTexts, ...this.enemyTexts, this.detailGraphics,
       this.enemyImage, this.symbolImage, this.detailName, this.statusText, hint,
     ]).setScrollFactor(0).setDepth(depth).setVisible(false);
   }
 
-  get enemies() {
+  get groups() {
     const registeredIds = EnemyBook.getRegisteredIds();
-    return this.enemyDefinitions.filter((definition) => registeredIds.has(definition.id));
+    const definitionsById = new Map(this.enemyDefinitions.map((definition) => [definition.id, definition]));
+    const predecessorIds = new Map();
+    this.enemyDefinitions.forEach((definition) => {
+      if (definition.evolutionId != null) {
+        predecessorIds.set(definition.evolutionId, definition.id);
+      }
+    });
+    const groupsByRootId = new Map();
+    this.enemyDefinitions.forEach((definition) => {
+      let rootId = definition.id;
+      while (predecessorIds.has(rootId)) {
+        rootId = predecessorIds.get(rootId);
+      }
+      if (!groupsByRootId.has(rootId)) {
+        groupsByRootId.set(rootId, []);
+      }
+      groupsByRootId.get(rootId).push(definition);
+    });
+    return [...groupsByRootId.entries()]
+      .map(([rootId, definitions]) => ({
+        name: `${definitionsById.get(rootId)?.name ?? definitions[0].name}種`,
+        definitions: definitions.sort((left, right) => left.id - right.id),
+        enemies: definitions.filter((definition) => registeredIds.has(definition.id)),
+      }))
+      .filter((group) => group.enemies.length > 0)
+      .sort((left, right) => (
+        left.name.localeCompare(right.name, 'ja')
+        || left.definitions[0].id - right.definitions[0].id
+      ));
   }
 
   open() {
-    this.selectedIndex = 0;
-    this.page = 0;
+    this.selectedGroupIndex = 0;
+    this.selectedEnemyIndex = 0;
+    this.focusedColumn = 'groups';
     this.container.setVisible(true);
     this.refresh();
   }
@@ -108,54 +152,106 @@ class EnemyBook {
   }
 
   handleInput(code) {
-    if (code === 'KeyX' || code === 'Escape' || code === 'KeyD' || code === 'KeyF') {
+    if (code === 'KeyD' || code === 'KeyF') {
       this.close();
       return true;
     }
-    const enemies = this.enemies;
-    if (enemies.length === 0 || !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) {
+    if (code === 'KeyX' || code === 'Escape') {
+      if (this.focusedColumn === 'enemies') {
+        this.focusedColumn = 'groups';
+        this.refresh();
+      } else {
+        this.close();
+      }
+      return true;
+    }
+    const groups = this.groups;
+    if (groups.length === 0) {
       return false;
     }
-    const pageCount = Math.ceil(enemies.length / this.rowsPerPage);
-    if (code === 'ArrowLeft' || code === 'ArrowRight') {
-      const selectedRow = this.selectedIndex % this.rowsPerPage;
-      this.page = (this.page + (code === 'ArrowRight' ? 1 : pageCount - 1)) % pageCount;
-      const pageStart = this.page * this.rowsPerPage;
-      this.selectedIndex = pageStart + Math.min(selectedRow, enemies.length - pageStart - 1);
+    if (this.focusedColumn === 'groups' && code === 'KeyZ') {
+      this.focusedColumn = 'enemies';
+      this.refresh();
+      return true;
+    }
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(code)) {
+      return false;
+    }
+    if (this.focusedColumn === 'groups' && (code === 'ArrowLeft' || code === 'ArrowRight')) {
+      const pageCount = Math.ceil(groups.length / this.rowsPerPage);
+      const selectedRow = this.selectedGroupIndex % this.rowsPerPage;
+      const currentPage = Math.floor(this.selectedGroupIndex / this.rowsPerPage);
+      const targetPage = (currentPage + (code === 'ArrowRight' ? 1 : pageCount - 1)) % pageCount;
+      this.selectedGroupIndex = Math.min(targetPage * this.rowsPerPage + selectedRow, groups.length - 1);
+      this.selectedEnemyIndex = 0;
+    } else if (this.focusedColumn === 'enemies' && (code === 'ArrowLeft' || code === 'ArrowRight')) {
+      if (code === 'ArrowLeft') {
+        this.focusedColumn = 'groups';
+      }
     } else {
-      const pageStart = this.page * this.rowsPerPage;
-      const pageEnd = Math.min(enemies.length - 1, pageStart + this.rowsPerPage - 1);
-      this.selectedIndex = code === 'ArrowUp'
-        ? (this.selectedIndex === pageStart ? pageEnd : this.selectedIndex - 1)
-        : (this.selectedIndex === pageEnd ? pageStart : this.selectedIndex + 1);
+      const delta = code === 'ArrowUp' ? -1 : 1;
+      if (this.focusedColumn === 'groups') {
+        const currentPage = Math.floor(this.selectedGroupIndex / this.rowsPerPage);
+        const pageStart = currentPage * this.rowsPerPage;
+        const pageEnd = Math.min(pageStart + this.rowsPerPage - 1, groups.length - 1);
+        this.selectedGroupIndex = delta < 0
+          ? (this.selectedGroupIndex === pageStart ? pageEnd : this.selectedGroupIndex - 1)
+          : (this.selectedGroupIndex === pageEnd ? pageStart : this.selectedGroupIndex + 1);
+        this.selectedEnemyIndex = 0;
+      } else {
+        const enemies = groups[this.selectedGroupIndex].enemies;
+        this.selectedEnemyIndex = (this.selectedEnemyIndex + delta + enemies.length) % enemies.length;
+      }
     }
     this.refresh();
     return true;
   }
 
   refresh() {
-    const enemies = this.enemies;
-    const panelX = (GAME_WIDTH - 1100) / 2;
+    const groups = this.groups;
+    const panelX = (GAME_WIDTH - 1200) / 2;
     const panelY = (GAME_HEIGHT - 620) / 2;
-    this.countText.setText(`${enemies.length} / ${this.enemyDefinitions.length}`);
-    this.rowGraphics.clear();
-    this.rowTexts.forEach((text, row) => {
-      const index = this.page * this.rowsPerPage + row;
-      const enemy = enemies[index];
-      const y = panelY + 76 + row * 38;
-      const selected = index === this.selectedIndex;
-      this.rowGraphics.fillStyle(selected ? 0x384d58 : 0x1c2932, 1);
-      this.rowGraphics.fillRect(panelX + 24, y, 500, 34);
-      this.rowGraphics.lineStyle(selected ? 2 : 1, selected ? 0xffdc4a : 0x607785, 1);
-      this.rowGraphics.strokeRect(panelX + 24, y, 500, 34);
-      text.setPosition(panelX + 40, y + 6).setText(enemy ? `No.${enemy.id + 1}　${enemy.name}` : '');
+    if (this.selectedGroupIndex >= groups.length) {
+      this.selectedGroupIndex = 0;
+      this.selectedEnemyIndex = 0;
+    }
+    const selectedGroup = groups[this.selectedGroupIndex];
+    if (this.selectedEnemyIndex >= (selectedGroup?.enemies.length ?? 0)) {
+      this.selectedEnemyIndex = 0;
+    }
+    const discoveredEnemies = groups.reduce((count, group) => count + group.enemies.length, 0);
+    this.countText.setText(`${discoveredEnemies} / ${this.enemyDefinitions.length}`);
+    this.groupTitle.setColor(this.focusedColumn === 'groups' ? '#ffdc4a' : '#9ab5c7');
+    this.enemyTitle.setColor(this.focusedColumn === 'enemies' ? '#ffdc4a' : '#9ab5c7');
+    const groupPage = Math.floor(this.selectedGroupIndex / this.rowsPerPage);
+    const groupPageCount = Math.ceil(groups.length / this.rowsPerPage);
+    const groupPageStart = groupPage * this.rowsPerPage;
+    this.groupPageText.setText(`${groupPage + 1} / ${groupPageCount}`);
+    this.groupGraphics.clear();
+    this.groupTexts.forEach((text, row) => {
+      const index = groupPageStart + row;
+      const group = groups[index];
+      const y = panelY + 86 + row * 38;
+      const selected = index === this.selectedGroupIndex;
+      this.drawRow(this.groupGraphics, panelX + 24, y, 255, selected, this.focusedColumn === 'groups');
+      text.setPosition(panelX + 34, y + 7).setText(group ? `${group.name}  ${group.enemies.length}/${group.definitions.length}` : '');
+      text.setColor(selected && group ? '#ffdc4a' : '#f3f1e8');
+    });
+    this.enemyGraphics.clear();
+    this.enemyTexts.forEach((text, row) => {
+      const enemy = selectedGroup?.enemies[row];
+      const y = panelY + 86 + row * 38;
+      const selected = row === this.selectedEnemyIndex;
+      this.drawRow(this.enemyGraphics, panelX + 300, y, 305, selected, this.focusedColumn === 'enemies');
+      text.setPosition(panelX + 310, y + 6).setText(enemy?.name ?? '');
       text.setColor(selected && enemy ? '#ffdc4a' : '#f3f1e8');
     });
     this.detailGraphics.clear();
     this.detailGraphics.lineStyle(1, 0x607785, 1);
-    this.detailGraphics.lineBetween(panelX + 550, panelY + 50, panelX + 550, panelY + 570);
-    this.detailGraphics.lineBetween(panelX + 570, panelY + 365, panelX + 1070, panelY + 365);
-    const enemy = enemies[this.selectedIndex];
+    this.detailGraphics.lineBetween(panelX + 287, panelY + 50, panelX + 287, panelY + 570);
+    this.detailGraphics.lineBetween(panelX + 620, panelY + 50, panelX + 620, panelY + 570);
+    this.detailGraphics.lineBetween(panelX + 640, panelY + 365, panelX + 1170, panelY + 365);
+    const enemy = selectedGroup?.enemies[this.selectedEnemyIndex];
     this.enemyImage.setVisible(Boolean(enemy));
     this.symbolImage.setVisible(Boolean(enemy?.symbolFile));
     this.detailName.setText(enemy?.name ?? '撃破済みの実験体はありません');
@@ -166,6 +262,13 @@ class EnemyBook {
         this.symbolImage.setTexture(enemy.symbolFile);
       }
     }
+  }
+
+  drawRow(graphics, x, y, width, selected, isFocused) {
+    graphics.fillStyle(selected ? 0x384d58 : 0x1c2932, 1);
+    graphics.fillRect(x, y, width, 34);
+    graphics.lineStyle(selected && isFocused ? 2 : 1, selected && isFocused ? 0xffdc4a : 0x607785, 1);
+    graphics.strokeRect(x, y, width, 34);
   }
 
   getStatusText(enemy) {
