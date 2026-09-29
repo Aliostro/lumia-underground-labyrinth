@@ -1195,6 +1195,14 @@ class DungeonTestScene extends Phaser.Scene {
     ));
   }
 
+  hasEquippedWeaponEffect(effectId) {
+    return this.playerStatus.inventory.some((item) => (
+      item.equipped === 0
+      && this.itemDefinitions.get(item.id)?.category === 0
+      && this.itemDefinitions.get(item.id)?.equipEffectId === effectId
+    ));
+  }
+
   hasDanielVisionEffect(room) {
     return this.enemies.some((enemy) => (
       enemy.specialAbilityId === ENEMY_SKILL_DANIEL_LIMITS_VISION
@@ -3590,7 +3598,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.isHeroMoving = true;
       this.idleTween.stop();
       this.hero.setScale(HERO_SCALE);
-      const hasDoubleAttackEffect = this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK);
+      const hasDoubleAttackEffect = this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK);
       const hasAlwaysDoubleAttackEffect = this.hasEquipEffect(ITEM_EQUIP_EFFECT_ALWAYS_DOUBLE_ATTACK);
       const doubleAttackTriggered = hasAlwaysDoubleAttackEffect || (
         hasDoubleAttackEffect
@@ -3873,8 +3881,8 @@ class DungeonTestScene extends Phaser.Scene {
 
   playerAttack(enemy, ranged = false) {
     this.wakeSpawnSleepingEnemy(enemy);
-    const hasSlowAttackEffect = !ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK);
-    const hasParalyzeAttackEffect = !ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK);
+    const hasSlowAttackEffect = !ranged && this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK);
+    const hasParalyzeAttackEffect = !ranged && this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK);
     let slowAttackTriggered = false;
     let paralyzeAttackTriggered = false;
     const rangedAttackBonus = !ranged
@@ -3959,9 +3967,9 @@ class DungeonTestScene extends Phaser.Scene {
       if (!equipped || triggered) {
         return;
       }
-      if (enemy.hitPoints > 0) {
+      if (hit && enemy.hitPoints > 0) {
         this.playerStatus.recordEquipmentEffectFailure(effectId);
-      } else {
+      } else if (hit) {
         this.playerStatus.resetEquipmentEffectFailures(effectId);
       }
     });
