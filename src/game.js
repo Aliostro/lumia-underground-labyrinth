@@ -6482,6 +6482,7 @@ class DungeonTestScene extends Phaser.Scene {
     if (
       enemy.specialAbilityId !== ENEMY_SKILL_LAURA_THEFT
       || enemy.heldItem
+      || enemy.lauraTheftFailed
       || !this.isEnemyAdjacent(enemy)
     ) {
       return null;
@@ -6490,21 +6491,24 @@ class DungeonTestScene extends Phaser.Scene {
       || this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_AND_TRANSFORMATION_IMMUNITY);
     const candidates = this.playerStatus.inventory.filter((item) => item.equipped == null);
     const item = theftPrevented ? null : Phaser.Utils.Array.GetRandom(candidates);
+    if (!item) {
+      enemy.lauraTheftFailed = true;
+      this.actionLog.add('ENEMY_LAURA_THEFT_FAILED', { enemy: this.getEnemyLogName(enemy) });
+      return null;
+    }
     const currentRoom = this.getRoomAt(enemy.tileX, enemy.tileY);
     const destinations = this.dungeonRooms
       .filter((room) => room !== currentRoom)
       .map((room) => this.findOpenTileInRoom(room))
       .filter(Boolean);
     const destination = Phaser.Utils.Array.GetRandom(destinations);
-    if (!destination || (!item && !theftPrevented)) {
+    if (!destination) {
       return null;
     }
     const definition = item && this.itemDefinitions.get(item.id);
-    if (item) {
-      enemy.heldItem = { ...item };
-      this.removeInventoryOrFloorItem(item);
-      this.refreshInventoryUi();
-    }
+    enemy.heldItem = { ...item };
+    this.removeInventoryOrFloorItem(item);
+    this.refreshInventoryUi();
     const movement = {
       enemy,
       fromX: enemy.sprite.x,
@@ -6520,14 +6524,10 @@ class DungeonTestScene extends Phaser.Scene {
     this.playEnemyWarpSfx();
     this.updateCharacterDepth(enemy.sprite, destination.y);
     this.updateEnemySymbolDepth(enemy);
-    if (item) {
-      this.actionLog.add('ENEMY_LAURA_THEFT', {
-        enemy: this.getEnemyLogName(enemy),
-        item: definition?.name ?? 'アイテム',
-      });
-    } else {
-      this.actionLog.add('ENEMY_LAURA_THEFT_FAILED', { enemy: this.getEnemyLogName(enemy) });
-    }
+    this.actionLog.add('ENEMY_LAURA_THEFT', {
+      enemy: this.getEnemyLogName(enemy),
+      item: definition?.name ?? 'アイテム',
+    });
     return movement;
   }
 
