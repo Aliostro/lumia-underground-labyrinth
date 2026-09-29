@@ -3,9 +3,9 @@ dungeon-desc  = "地下 30 階"
 max-floor     = 30
 max-enemies   = 60
 
-start-level   = 1
-start-floor   = 1
-start-item    = 4004
+start-level   = 999
+start-floor   = 10
+start-item    = 4004, 5015
 
 [design-map]
 0001: 0001 [0, 0]

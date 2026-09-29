@@ -261,7 +261,11 @@ class TitleScene extends Phaser.Scene {
   }
 
   createDungeonBackground() {
-    const dungeon = new DungeonGenerator().generate({ waterChance: 15 });
+    const dungeon = new DungeonGenerator().generate({
+      waterChance: 15,
+      minimumPonds: 2,
+      maximumPonds: 6,
+    });
     const mapChipNumber = Phaser.Math.Between(1, 5);
     const renderer = new DungeonRenderer(this, {
       tileSize: TILE_SIZE,
@@ -284,8 +288,73 @@ class TitleScene extends Phaser.Scene {
     renderer.mapChunks.forEach((chunk) => chunk
       .setScale(backgroundScale)
       .setPosition(chunk.x * backgroundScale + offsetX, chunk.y * backgroundScale + offsetY));
+    const occupiedTiles = this.placeBackgroundEnemies(dungeon, backgroundScale, offsetX, offsetY);
+    this.placeBackgroundItems(dungeon, backgroundScale, offsetX, offsetY, occupiedTiles);
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x101820, 0.72)
       .setDepth(-0.5);
+  }
+
+  placeBackgroundEnemies(dungeon, scale, offsetX, offsetY) {
+    const enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'))
+      .filter((enemy) => this.textures.exists(enemy.imageFile));
+    if (enemyDefinitions.length === 0) {
+      return new Set();
+    }
+    const availableTiles = dungeon.rooms.flatMap((room) => {
+      const tiles = [];
+      for (let y = room.y; y < room.y + room.height; y += 1) {
+        for (let x = room.x; x < room.x + room.width; x += 1) {
+          if (dungeon.tiles[y]?.[x] === FLOOR_TILE) {
+            tiles.push({ x, y });
+          }
+        }
+      }
+      return tiles;
+    });
+    const count = Math.min(Phaser.Math.Between(8, 12), availableTiles.length);
+    Phaser.Utils.Array.Shuffle(availableTiles);
+    const occupiedTiles = new Set();
+    for (let index = 0; index < count; index += 1) {
+      const position = availableTiles[index];
+      const enemy = Phaser.Utils.Array.GetRandom(enemyDefinitions);
+      this.add.image(
+        offsetX + (position.x + 0.5) * TILE_SIZE * scale,
+        offsetY + (position.y + 1) * TILE_SIZE * scale,
+        enemy.imageFile,
+      ).setOrigin(0.5, 1).setDisplaySize(ENEMY_DISPLAY_SIZE * scale, ENEMY_DISPLAY_SIZE * scale).setDepth(-0.75);
+      occupiedTiles.add(`${position.x},${position.y}`);
+    }
+    return occupiedTiles;
+  }
+
+  placeBackgroundItems(dungeon, scale, offsetX, offsetY, occupiedTiles) {
+    const itemDefinitions = [...GameData.parseItemData(this.cache.text.get('item-data')).values()];
+    if (itemDefinitions.length === 0) {
+      return;
+    }
+    const availableTiles = dungeon.rooms.flatMap((room) => {
+      const tiles = [];
+      for (let y = room.y; y < room.y + room.height; y += 1) {
+        for (let x = room.x; x < room.x + room.width; x += 1) {
+          if (dungeon.tiles[y]?.[x] === FLOOR_TILE && !occupiedTiles.has(`${x},${y}`)) {
+            tiles.push({ x, y });
+          }
+        }
+      }
+      return tiles;
+    });
+    const count = Math.min(Phaser.Math.Between(9, 12), availableTiles.length);
+    Phaser.Utils.Array.Shuffle(availableTiles);
+    for (let index = 0; index < count; index += 1) {
+      const position = availableTiles[index];
+      const item = Phaser.Utils.Array.GetRandom(itemDefinitions);
+      const iconKey = ITEM_ICON_KEYS[item.category] || ITEM_ICON_KEYS[90];
+      this.add.image(
+        offsetX + (position.x + 0.5) * TILE_SIZE * scale,
+        offsetY + (position.y + 0.5) * TILE_SIZE * scale,
+        iconKey,
+      ).setDisplaySize(40 * scale, 40 * scale).setDepth(-0.7);
+    }
   }
 
   create() {
@@ -375,11 +444,13 @@ class TitleScene extends Phaser.Scene {
       if (!canResume) {
         return;
       }
+      this.openResumeConfirmation();
+    };
+    this.resumeSuspendedRun = () => {
       const run = takeSuspendedRun();
       if (!run?.dungeonDataKey || !run?.dungeonDataFile || !run?.playerStatus) {
         return;
       }
-      this.sound.play('se-cursor-enter');
       this.scene.start('DungeonTestScene', {
         dungeonDataKey: run.dungeonDataKey,
         dungeonDataFile: run.dungeonDataFile,
@@ -410,6 +481,7 @@ class TitleScene extends Phaser.Scene {
     this.titleSelectionRow = 0;
     this.updateTitleMenuSelection();
     this.createParallelControls(startDungeon, dungeonOptions);
+    this.createResumeConfirmationUi();
     this.add.text(GAME_WIDTH / 2, 736, '十字キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
@@ -417,6 +489,10 @@ class TitleScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.onTitleKeyDown = (event) => {
       if (event.repeat) {
+        return;
+      }
+      if (this.resumeConfirmationUi?.visible) {
+        this.handleResumeConfirmationInput(event.code);
         return;
       }
       if (this.optionWindowVisible) {
@@ -663,7 +739,79 @@ class TitleScene extends Phaser.Scene {
   }
 
   isTitleWindowOpen() {
-    return this.optionWindowVisible || this.recipeBook?.container.visible || this.enemyBook?.container.visible;
+    return this.resumeConfirmationUi?.visible
+      || this.optionWindowVisible
+      || this.recipeBook?.container.visible
+      || this.enemyBook?.container.visible;
+  }
+
+  createResumeConfirmationUi() {
+    const panelWidth = 640;
+    const panelHeight = 250;
+    const panelX = (GAME_WIDTH - panelWidth) / 2;
+    const panelY = (GAME_HEIGHT - panelHeight) / 2;
+    const overlay = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.62);
+    const panel = this.add.graphics();
+    panel.fillStyle(0x101820, 0.98);
+    panel.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 8);
+    panel.lineStyle(2, 0xd9b85a, 1);
+    panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 8);
+    const message = this.add.text(GAME_WIDTH / 2, panelY + 54, '中断データから再開します。', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '22px', color: '#f3f1e8', align: 'center',
+    }).setOrigin(0.5);
+    const warning = this.add.text(GAME_WIDTH / 2, panelY + 92, '再開後この中断データは削除されます。', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '22px', color: '#ff7b7b', align: 'center',
+    }).setOrigin(0.5);
+    this.resumeConfirmationGraphics = this.add.graphics();
+    this.resumeConfirmationTexts = ['はい', 'いいえ'].map((label, index) => this.add.text(
+      panelX + 205 + index * 230, panelY + 190, label,
+      { fontFamily: 'Yusei Magic, sans-serif', fontSize: '24px', color: '#f3f1e8' },
+    ).setOrigin(0.5));
+    this.resumeConfirmationUi = this.add.container(0, 0, [
+      overlay, panel, message, warning, this.resumeConfirmationGraphics, ...this.resumeConfirmationTexts,
+    ]).setScrollFactor(0).setDepth(20).setVisible(false);
+    this.resumeConfirmationIndex = 0;
+  }
+
+  openResumeConfirmation() {
+    this.resumeConfirmationIndex = 0;
+    this.refreshResumeConfirmation();
+    this.resumeConfirmationUi.setVisible(true);
+    this.sound.play('se-cursor-enter');
+  }
+
+  closeResumeConfirmation() {
+    this.resumeConfirmationUi.setVisible(false);
+  }
+
+  refreshResumeConfirmation() {
+    const panelX = (GAME_WIDTH - 640) / 2;
+    const panelY = (GAME_HEIGHT - 250) / 2;
+    this.resumeConfirmationGraphics.clear();
+    this.resumeConfirmationTexts.forEach((text, index) => {
+      const selected = index === this.resumeConfirmationIndex;
+      this.resumeConfirmationGraphics.fillStyle(selected ? 0x384d58 : 0x101820, 1);
+      this.resumeConfirmationGraphics.fillRect(panelX + 130 + index * 230, panelY + 170, 150, 40);
+      text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
+    });
+  }
+
+  handleResumeConfirmationInput(code) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(code)) {
+      this.resumeConfirmationIndex = 1 - this.resumeConfirmationIndex;
+      this.refreshResumeConfirmation();
+      this.sound.play('se-cursor-move');
+    } else if (code === 'KeyZ' || code === 'Enter' || code === 'Space') {
+      this.sound.play('se-cursor-enter');
+      if (this.resumeConfirmationIndex === 0) {
+        this.resumeSuspendedRun();
+      } else {
+        this.closeResumeConfirmation();
+      }
+    } else if (code === 'KeyX' || code === 'Escape') {
+      this.closeResumeConfirmation();
+      this.sound.play('se-cursor-cancel');
+    }
   }
 
   createTitleMenuItem(x, y, label, action, subtitle = '', options = {}) {
