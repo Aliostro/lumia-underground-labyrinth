@@ -6,6 +6,9 @@ class DungeonRenderer {
     this.corridorTile = options.corridorTile;
     this.waterTile = options.waterTile;
     this.waterKey = options.waterKey;
+    this.waterSprite = this.scene.make.image({ key: this.waterKey, add: false })
+      .setOrigin(0)
+      .setDisplaySize(this.tileSize, this.tileSize);
     this.decorationChance = options.decorationChance;
     this.chunkSize = options.chunkSize;
     this.marginX = options.marginX;
@@ -51,7 +54,8 @@ class DungeonRenderer {
         const tileX = startX + x;
         const tile = this.tiles[tileY]?.[tileX];
         if (tile === this.waterTile) {
-          texture.draw(this.waterKey, x * this.tileSize, y * this.tileSize);
+          this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
+          texture.draw(this.waterSprite);
         } else {
           const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
           texture.drawFrame(this.mapChipKey, frame, x * this.tileSize, y * this.tileSize);
@@ -94,4 +98,5 @@ class DungeonRenderer {
     const tileBelow = tiles[y + 1]?.[x];
     return tileBelow === this.floorTile || tileBelow === this.corridorTile || tileBelow === this.waterTile ? 1 : 0;
   }
+
 }

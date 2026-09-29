@@ -117,6 +117,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   create(data) {
+    this.suspendedState = data?.suspendedState ?? null;
     this.isChangingFloor = false;
     this.isGameOver = false;
     this.inputReady = false;
@@ -138,7 +139,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.messageData = GameData.parseMessageData(this.cache.text.get('message-data'));
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
     const continuesExistingRun = data?.newRun !== true && data?.playerStatus != null;
-    this.playerStatus = continuesExistingRun ? data.playerStatus : new PlayerStatus();
+    this.playerStatus = continuesExistingRun
+      ? Object.assign(new PlayerStatus(), data.playerStatus)
+      : new PlayerStatus();
     if (!continuesExistingRun) {
       this.playerStatus.floor = this.dungeonData.startFloor;
       this.playerStatus.setLevel(this.dungeonData.startLevel);
@@ -150,16 +153,25 @@ class DungeonTestScene extends Phaser.Scene {
     const floorDesign = this.dungeonData.designMap.get(this.playerStatus.floor) ?? {
       mapChipNumber: 1,
       waterChance: 0,
+      minimumPonds: 0,
+      maximumPonds: 0,
     };
-    const dungeon = new DungeonGenerator(() => this.getInitialRandom()).generate({
-      waterChance: floorDesign.waterChance,
-    });
+    const dungeon = this.suspendedState
+      ? {
+        tiles: this.suspendedState.tiles.map((row) => [...row]),
+        rooms: this.suspendedState.rooms.map((room) => ({ ...room })),
+      }
+      : new DungeonGenerator(() => this.getInitialRandom()).generate({
+        waterChance: floorDesign.waterChance,
+        minimumPonds: floorDesign.minimumPonds,
+        maximumPonds: floorDesign.maximumPonds,
+      });
     this.dungeonTiles = dungeon.tiles;
     this.dungeonRooms = dungeon.rooms;
     this.corridorTiles = this.getCorridorTiles();
     this.playerStatus.runStartedAt ??= Date.now();
     this.floorItems = [];
-    this.floorTurn = 0;
+    this.floorTurn = this.suspendedState?.floorTurn ?? 0;
     this.isaacHayesInvasion = false;
     this.isaacHayesWarningAnnounced = false;
     this.firePillars = [];
@@ -194,7 +206,7 @@ class DungeonTestScene extends Phaser.Scene {
         }
       }
     }
-    const spawnPosition = this.getInitialRandomItem(spawnTiles) || {
+    const spawnPosition = this.suspendedState?.heroPosition || this.getInitialRandomItem(spawnTiles) || {
       x: spawnRoom.centerX,
       y: spawnRoom.centerY,
     };
@@ -252,10 +264,14 @@ class DungeonTestScene extends Phaser.Scene {
     this.diagonalInputIndicators = this.add.graphics().setDepth(this.hero.depth + 2).setVisible(false);
     this.updateHeroDepth(this.heroTileY);
     this.startIdleMotion();
-    this.spawnStairs();
-    this.spawnEnemies(dungeon.rooms);
-    this.spawnFloorItems();
-    this.spawnMonsterHouse();
+    if (this.suspendedState) {
+      this.restoreSuspendedFloor();
+    } else {
+      this.spawnStairs();
+      this.spawnEnemies(dungeon.rooms);
+      this.spawnFloorItems();
+      this.spawnMonsterHouse();
+    }
     this.initialRandom = null;
     this.enemyRespawnTurns = 0;
 
@@ -299,6 +315,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.createMinimap();
     this.createInventoryUi();
     this.createStairMenuUi();
+    this.createSuspendMenuUi();
     this.recipeBook = new RecipeBook(this, this.itemDefinitions);
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions);
     this.actionLog = new ActionLog(this, this.messageData, () => this.floorTurn);
@@ -321,6 +338,10 @@ class DungeonTestScene extends Phaser.Scene {
     this.onMapOverlayKeyUp = () => this.mapOverlay.setVisible(false);
     this.onGameKeyDown = (event) => {
       if (!this.inputReady || this.isGameOver) {
+        return;
+      }
+      if (this.suspendMenuUi?.visible) {
+        this.handleSuspendMenuInput(event);
         return;
       }
       if (this.actionLog.historyVisible) {
@@ -725,6 +746,80 @@ class DungeonTestScene extends Phaser.Scene {
       'stairs',
     ).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(position.y + 0.25);
     this.stairs = { ...position, sprite };
+  }
+
+  createSuspendedState() {
+    const serializeEnemy = (enemy) => {
+      const {
+        sprite, symbolOutline, symbol, jackieLevelText, sleepText, confusionText, peaceText,
+        hasteText, slowText, paralysisText, sealText, idleTween, ...state
+      } = enemy;
+      return state;
+    };
+    const serializeFloorItem = (item) => {
+      const { marker, ...state } = item;
+      return state;
+    };
+    return {
+      tiles: this.dungeonTiles,
+      rooms: this.dungeonRooms,
+      heroPosition: { x: this.heroTileX, y: this.heroTileY },
+      stairs: this.stairs && { x: this.stairs.x, y: this.stairs.y },
+      floorItems: this.floorItems.map(serializeFloorItem),
+      enemies: this.enemies.map(serializeEnemy),
+      lumi: this.lumi && { tileX: this.lumi.tileX, tileY: this.lumi.tileY },
+      floorTurn: this.floorTurn,
+    };
+  }
+
+  restoreSuspendedFloor() {
+    this.enemies = [];
+    this.lumi = null;
+    if (this.suspendedState.stairs) {
+      this.spawnStairs();
+      this.stairs.x = this.suspendedState.stairs.x;
+      this.stairs.y = this.suspendedState.stairs.y;
+      this.stairs.sprite.setPosition(
+        (this.stairs.x + 0.5) * TILE_SIZE,
+        (this.stairs.y + 0.5) * TILE_SIZE,
+      ).setDepth(this.stairs.y + 0.25);
+    }
+    this.suspendedState.floorItems.forEach((item) => {
+      this.placeFloorItem({ ...item }, item.tileX, item.tileY);
+    });
+    this.suspendedState.enemies.forEach((savedEnemy) => {
+      const enemy = this.spawnEnemy(
+        { entries: [{ id: savedEnemy.id, weight: 1 }] },
+        { x: savedEnemy.tileX, y: savedEnemy.tileY },
+        true,
+      );
+      if (!enemy) {
+        return;
+      }
+      const { sprite, symbolOutline, symbol, jackieLevelText, sleepText, confusionText, peaceText,
+        hasteText, slowText, paralysisText, sealText, idleTween, ...state } = savedEnemy;
+      Object.assign(enemy, state);
+      const spriteX = (enemy.tileX + 0.5) * TILE_SIZE;
+      const spriteY = (enemy.tileY + (enemy.disguised ? 0.5 : 1)) * TILE_SIZE;
+      if (!enemy.disguised) {
+        enemy.sprite.setTexture(enemy.imageFile)
+          .setOrigin(0.5, 1)
+          .setDisplaySize(ENEMY_DISPLAY_SIZE, ENEMY_DISPLAY_SIZE);
+      }
+      enemy.sprite.setPosition(spriteX, spriteY);
+      enemy.symbolOutline?.setPosition(spriteX + 28, spriteY - 20);
+      enemy.symbol?.setPosition(spriteX + 28, spriteY - 20);
+      enemy.jackieLevelText?.setPosition(spriteX + 30, spriteY - 10);
+      [
+        enemy.sleepText, enemy.confusionText, enemy.peaceText, enemy.hasteText,
+        enemy.slowText, enemy.paralysisText, enemy.sealText,
+      ].forEach((text) => text?.setPosition(spriteX + 34, spriteY - 90));
+      this.updateCharacterDepth(enemy.sprite, enemy.tileY);
+      this.updateEnemySymbolDepth(enemy);
+    });
+    if (this.suspendedState.lumi) {
+      this.spawnLumiAt(this.suspendedState.lumi);
+    }
   }
 
   getCorridorTiles() {
@@ -1281,6 +1376,84 @@ class DungeonTestScene extends Phaser.Scene {
     }
   }
 
+  createSuspendMenuUi() {
+    const blackout = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000);
+    const panelWidth = 600;
+    const panelHeight = 240;
+    const panelX = (GAME_WIDTH - panelWidth) / 2;
+    const panelY = (GAME_HEIGHT - panelHeight) / 2;
+    const background = this.add.graphics();
+    background.fillStyle(0x101820, 0.97);
+    background.fillRoundedRect(panelX, panelY, panelWidth, panelHeight, 8);
+    background.lineStyle(2, 0xd9b85a, 1);
+    background.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 8);
+    const title = this.add.text(panelX + 24, panelY + 34, 'ゲームを中断することができます。\n中断しますか？（中断するとタイトル画面に戻ります）', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '20px', color: '#f3f1e8', lineSpacing: 10,
+    });
+    this.suspendMenuGraphics = this.add.graphics();
+    this.suspendMenuTexts = ['はい', 'いいえ'].map((label, index) => this.add.text(
+      panelX + 190 + index * 220, panelY + 190, label,
+      { fontFamily: 'Yusei Magic, sans-serif', fontSize: '24px', color: '#f3f1e8' },
+    ).setOrigin(0.5));
+    this.suspendMenuUi = this.add.container(0, 0, [
+      blackout, background, title, this.suspendMenuGraphics, ...this.suspendMenuTexts,
+    ])
+      .setScrollFactor(0).setDepth(STAIR_MENU_DEPTH).setVisible(false);
+    this.selectedSuspendMenuIndex = 0;
+  }
+
+  openSuspendMenu() {
+    this.selectedSuspendMenuIndex = 0;
+    this.suspendMenuWaitForZRelease = isZKeyHeld;
+    if (this.suspendMenuWaitForZRelease) {
+      this.input.keyboard.once('keyup-Z', () => {
+        this.suspendMenuWaitForZRelease = false;
+      });
+    }
+    this.refreshSuspendMenu();
+    this.suspendMenuUi.setVisible(true);
+    this.game.canvas.focus();
+  }
+
+  refreshSuspendMenu() {
+    const panelX = (GAME_WIDTH - 600) / 2;
+    const panelY = (GAME_HEIGHT - 240) / 2;
+    this.suspendMenuGraphics.clear();
+    this.suspendMenuTexts.forEach((text, index) => {
+      const selected = index === this.selectedSuspendMenuIndex;
+      this.suspendMenuGraphics.fillStyle(selected ? 0x384d58 : 0x101820, 1);
+      this.suspendMenuGraphics.fillRect(panelX + 115 + index * 220, panelY + 170, 150, 40);
+      text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
+    });
+  }
+
+  handleSuspendMenuInput(event) {
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.code)) {
+      this.selectedSuspendMenuIndex = 1 - this.selectedSuspendMenuIndex;
+      this.refreshSuspendMenu();
+      this.playSfx('se-cursor-move');
+    } else if (event.code === 'KeyZ' && this.suspendMenuWaitForZRelease) {
+      return;
+    } else if (event.code === 'KeyZ' || event.code === 'Enter' || event.code === 'Space') {
+      this.playSfx('se-cursor-enter');
+      if (this.selectedSuspendMenuIndex === 0) {
+        saveSuspendedRun({
+          dungeonDataKey: this.dungeonDataKey,
+          dungeonDataFile: this.dungeonDataFile,
+          parallelCode: this.parallelCode,
+          playerSkinIndex: this.playerSkinIndex,
+          playerStatus: this.playerStatus,
+        });
+        this.scene.start('TitleScene');
+      } else {
+        this.restartNextFloor();
+      }
+    } else if (event.code === 'KeyX' || event.code === 'Escape') {
+      this.playSfx('se-cursor-cancel');
+      this.restartNextFloor();
+    }
+  }
+
   advanceFloor() {
     if (this.isChangingFloor) {
       return;
@@ -1291,6 +1464,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.showResult(null, true);
       return;
     }
+    const shouldOfferSuspension = this.playerStatus.floor % 10 === 0;
     this.isChangingFloor = true;
     this.playerStatus.sleepTurns = 0;
     this.playerStatus.confusionTurns = 0;
@@ -1308,12 +1482,21 @@ class DungeonTestScene extends Phaser.Scene {
     this.playerStatus.floor += 1;
     this.cameras.main.fadeOut(250, 0, 0, 0);
     this.time.delayedCall(250, () => {
-      this.scene.restart({
-        playerStatus: this.playerStatus,
-        fadeIn: true,
-        parallelCode: this.parallelCode,
-        playerSkinIndex: this.playerSkinIndex,
-      });
+      if (shouldOfferSuspension) {
+        this.cameras.main.resetFX();
+        this.openSuspendMenu();
+        return;
+      }
+      this.restartNextFloor();
+    });
+  }
+
+  restartNextFloor() {
+    this.scene.restart({
+      playerStatus: this.playerStatus,
+      fadeIn: true,
+      parallelCode: this.parallelCode,
+      playerSkinIndex: this.playerSkinIndex,
     });
   }
 
@@ -1408,10 +1591,14 @@ class DungeonTestScene extends Phaser.Scene {
       const hungerBefore = this.playerStatus.hunger;
       const wasAtMaximumHitPoints = hitPointsBefore === this.playerStatus.maxHitPoints;
       const wasAtMaximumHunger = hungerBefore === this.playerStatus.maxHunger;
-      this.playerStatus.hitPoints = Math.min(this.playerStatus.maxHitPoints, this.playerStatus.hitPoints + definition.hitPoints);
-      this.playerStatus.hunger = Math.min(this.playerStatus.maxHunger, this.playerStatus.hunger + definition.hunger);
-      const recoveredHitPoints = this.playerStatus.hitPoints - hitPointsBefore;
-      const recoveredHunger = this.playerStatus.hunger - hungerBefore;
+      const foodEffectMultiplier = definition.category === 40
+        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_DRAUPNIR) ? 1.5 : 1;
+      const recoveredHitPoints = Math.ceil(definition.hitPoints * foodEffectMultiplier);
+      const recoveredHunger = Math.ceil(definition.hunger * foodEffectMultiplier);
+      this.playerStatus.hitPoints = Math.min(this.playerStatus.maxHitPoints, this.playerStatus.hitPoints + recoveredHitPoints);
+      this.playerStatus.hunger = Math.min(this.playerStatus.maxHunger, this.playerStatus.hunger + recoveredHunger);
+      const recoveredHitPointsAmount = this.playerStatus.hitPoints - hitPointsBefore;
+      const recoveredHungerAmount = this.playerStatus.hunger - hungerBefore;
       this.actionLog.add(action === '食べる' ? 'ITEM_ATE' : 'ITEM_USED', { item: definition.name });
       this.applyItemUseEffect(definition, wasAtMaximumHitPoints, wasAtMaximumHunger);
       if (this.playerStatus.hunger > hungerBefore) {
@@ -1420,11 +1607,11 @@ class DungeonTestScene extends Phaser.Scene {
       if (definition.category !== 50 || this.consumeDeviceUse(item)) {
         this.removeInventoryOrFloorItem(item);
       }
-      if (recoveredHitPoints > 0) {
-        this.actionLog.add('ITEM_HP_RECOVERY', { amount: recoveredHitPoints });
+      if (recoveredHitPointsAmount > 0) {
+        this.actionLog.add('ITEM_HP_RECOVERY', { amount: recoveredHitPointsAmount });
       }
-      if (recoveredHunger > 0) {
-        this.actionLog.add('ITEM_HUNGER_RECOVERY', { amount: recoveredHunger });
+      if (recoveredHungerAmount > 0) {
+        this.actionLog.add('ITEM_HUNGER_RECOVERY', { amount: recoveredHungerAmount });
       }
     } else {
       if (item.equipped != null) {
@@ -1672,7 +1859,11 @@ class DungeonTestScene extends Phaser.Scene {
       [ITEM_EFFECT_INCREASE_MAX_HUNGER_BY_3]: 3,
     }[definition.useEffectId];
     if (maximumHungerIncrease && wasAtMaximumHunger) {
-      const amount = maximumHungerIncrease;
+      const amount = Math.ceil(
+        maximumHungerIncrease * (
+          definition.category === 40 && this.hasEquipEffect(ITEM_EQUIP_EFFECT_DRAUPNIR) ? 1.5 : 1
+        ),
+      );
       this.playerStatus.maxHunger += amount;
       this.playerStatus.hunger = Math.min(
         this.playerStatus.maxHunger,
@@ -6756,8 +6947,9 @@ class DungeonTestScene extends Phaser.Scene {
   findShortestPathStep(enemy, target) {
     const queue = [{ x: enemy.tileX, y: enemy.tileY, firstStep: null }];
     const visited = new Set([`${enemy.tileX},${enemy.tileY}`]);
+    const maximumVisitedTiles = 256;
 
-    for (let index = 0; index < queue.length; index += 1) {
+    for (let index = 0; index < queue.length && index < maximumVisitedTiles; index += 1) {
       const current = queue[index];
       if (current.x === target.x && current.y === target.y) {
         return current.firstStep;
@@ -6824,7 +7016,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   isEva(enemy) {
-    return enemy.specialAbilityId === ENEMY_SKILL_PHASE_THROUGH_WALLS;
+    return enemy?.specialAbilityId === ENEMY_SKILL_PHASE_THROUGH_WALLS;
   }
 
   getEnemyVisibleTiles(enemy) {

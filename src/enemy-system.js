@@ -36,6 +36,10 @@ const EnemySystem = {
     if (!position) {
       return;
     }
+    this.spawnLumiAt(position);
+  },
+
+  spawnLumiAt(position) {
     const sprite = this.add.image(
       (position.x + 0.5) * TILE_SIZE,
       (position.y + 1) * TILE_SIZE,
@@ -177,7 +181,9 @@ const EnemySystem = {
         this.enemyDefinitions.find((candidate) => candidate.id === entry.id)?.specialAbilityId
           !== ENEMY_SKILL_SUA_COPY_ABILITY
       )));
-      enemy.copiedSpecialAbilityId = copiedDefinition?.specialAbilityId ?? null;
+      const copiedSpecialAbilityId = copiedDefinition?.specialAbilityId;
+      enemy.copiedSpecialAbilityId = [ENEMY_SKILL_IAN_WANDER, ENEMY_SKILL_POSSESSED_IAN]
+        .includes(copiedSpecialAbilityId) ? null : copiedSpecialAbilityId ?? null;
       enemy.specialAbilityId = enemy.copiedSpecialAbilityId;
     }
     if (enemy.specialAbilityId === ENEMY_SKILL_JACKIE_ADRENALINE) {

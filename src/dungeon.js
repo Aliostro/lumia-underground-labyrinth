@@ -13,7 +13,11 @@ class DungeonGenerator {
   generate(options = {}) {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       try {
-        const dungeon = this.createDungeon(options.waterChance ?? 0);
+        const dungeon = this.createDungeon(
+          options.waterChance ?? 0,
+          options.minimumPonds ?? 0,
+          options.maximumPonds ?? 0,
+        );
         if (this.areRoomsConnected(dungeon)) {
           return dungeon;
         }
@@ -25,7 +29,7 @@ class DungeonGenerator {
     throw new Error('ダンジョンの生成に失敗しました。');
   }
 
-  createDungeon(waterChance) {
+  createDungeon(waterChance, minimumPonds, maximumPonds) {
     const tiles = Array.from(
       { length: this.height },
       () => Array(this.width).fill(0),
@@ -51,7 +55,48 @@ class DungeonGenerator {
     }
 
     this.placeWater(tiles, rooms, waterChance);
+    this.placePonds(tiles, minimumPonds, maximumPonds);
     return { tiles, rooms };
+  }
+
+  placePonds(tiles, minimumPonds, maximumPonds) {
+    const pondCount = this.randomInt(minimumPonds, maximumPonds);
+    for (let index = 0; index < pondCount; index += 1) {
+      const pondTiles = this.createPond(tiles);
+      if (!pondTiles) {
+        continue;
+      }
+      pondTiles.forEach((tile) => {
+        if (tiles[tile.y][tile.x] === 0) {
+          tiles[tile.y][tile.x] = 3;
+        }
+      });
+    }
+  }
+
+  createPond(tiles) {
+    const targetCount = this.randomInt(30, 50);
+    const start = {
+      x: this.randomInt(1, this.width - 2),
+      y: this.randomInt(1, this.height - 2),
+    };
+    const pondTiles = [start];
+    const pondTileKeys = new Set([`${start.x},${start.y}`]);
+    while (pondTiles.length < targetCount) {
+      const candidates = pondTiles.flatMap((source) => (
+        [[0, -1], [1, 0], [0, 1], [-1, 0]]
+          .map(([offsetX, offsetY]) => ({ x: source.x + offsetX, y: source.y + offsetY }))
+          .filter((tile) => tile.x > 0 && tile.x < this.width - 1 && tile.y > 0 && tile.y < this.height - 1)
+          .filter((tile) => !pondTileKeys.has(`${tile.x},${tile.y}`))
+      ));
+      if (candidates.length === 0) {
+        break;
+      }
+      const nextTile = candidates[this.randomInt(0, candidates.length - 1)];
+      pondTiles.push(nextTile);
+      pondTileKeys.add(`${nextTile.x},${nextTile.y}`);
+    }
+    return pondTiles;
   }
 
   placeWater(tiles, rooms, waterChance) {

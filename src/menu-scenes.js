@@ -2,6 +2,7 @@ let isZKeyHeld = false;
 const SFX_VOLUME_STORAGE_KEY = 'lumia-underground-labyrinth-sfx-volume';
 const PLAYER_SKIN_STORAGE_KEY = 'lumia-underground-labyrinth-player-skin';
 const DUNGEON_CLEAR_STORAGE_KEY = 'lumia-underground-labyrinth-cleared-dungeons';
+const SUSPENDED_RUN_STORAGE_KEY = 'lumia-underground-labyrinth-suspended-run';
 const DUNGEON_CLEAR_DISPLAYS = [
   { file: 'dungeon-0001.dat', label: 'ルミア島の地下迷宮 踏破', imageKey: 'dungeon-clear-rul', imageFile: 'IconClearRUL.png' },
   { file: 'dungeon-0002.dat', label: 'ホテル裏の下り階段 踏破', imageKey: 'dungeon-clear-hd', imageFile: 'IconClearHD.png' },
@@ -12,6 +13,43 @@ const PLAYER_SKINS = [
   { key: 'player-skin-alternate', file: 'Chara0001a.png', label: 'ブラサバ', unlockDungeonFile: 'dungeon-0001.dat' },
   { key: 'player-skin-detective', file: 'Chara0001b.png', label: '探偵', unlockDungeonFile: 'dungeon-0002.dat' },
 ];
+
+function saveSuspendedRun(run) {
+  try {
+    window.localStorage.setItem(SUSPENDED_RUN_STORAGE_KEY, JSON.stringify(run));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function takeSuspendedRun() {
+  try {
+    const savedValue = window.localStorage.getItem(SUSPENDED_RUN_STORAGE_KEY);
+    window.localStorage.removeItem(SUSPENDED_RUN_STORAGE_KEY);
+    const run = JSON.parse(savedValue ?? 'null');
+    return run && typeof run === 'object' ? run : null;
+  } catch {
+    return null;
+  }
+}
+
+function getSuspendedRun() {
+  try {
+    const run = JSON.parse(window.localStorage.getItem(SUSPENDED_RUN_STORAGE_KEY) ?? 'null');
+    return run && typeof run === 'object' ? run : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasSuspendedRun() {
+  try {
+    return window.localStorage.getItem(SUSPENDED_RUN_STORAGE_KEY) != null;
+  } catch {
+    return false;
+  }
+}
 
 function getSfxVolume() {
   try {
@@ -330,17 +368,49 @@ class TitleScene extends Phaser.Scene {
       this.createTitleMenuItem(1060, 420, 'レシピ図鑑', () => this.openRecipeBook(), '', { width: 280, height: 64, fontSize: 24 }),
       this.createTitleMenuItem(1060, 508, '実験体図鑑', () => this.openEnemyBook(), '', { width: 280, height: 64, fontSize: 24 }),
     ];
-    this.titleMenuColumns = [mainMenuItems, bookMenuItems];
+    const suspendedRun = getSuspendedRun();
+    const suspendedDungeon = dungeonOptions.find((option) => option.key === suspendedRun?.dungeonDataKey);
+    const canResume = suspendedDungeon != null && suspendedRun?.playerStatus != null;
+    const resume = () => {
+      if (!canResume) {
+        return;
+      }
+      const run = takeSuspendedRun();
+      if (!run?.dungeonDataKey || !run?.dungeonDataFile || !run?.playerStatus) {
+        return;
+      }
+      this.sound.play('se-cursor-enter');
+      this.scene.start('DungeonTestScene', {
+        dungeonDataKey: run.dungeonDataKey,
+        dungeonDataFile: run.dungeonDataFile,
+        parallelCode: run.parallelCode,
+        playerSkinIndex: run.playerSkinIndex,
+        playerStatus: run.playerStatus,
+        suspendedState: run.suspendedState,
+      });
+    };
+    const resumeMenuItems = [this.createTitleMenuItem(
+      184,
+      476,
+      '中断データから開始',
+      resume,
+      '',
+      { width: 320, height: 42, fontSize: 20, disabled: !canResume },
+    )];
+    this.add.text(184, 514, canResume ? `${suspendedDungeon.data.dungeonName} B${suspendedRun.playerStatus.floor}F` : '', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#b7c6d3',
+    }).setOrigin(0.5);
+    this.titleMenuColumns = [resumeMenuItems, mainMenuItems, bookMenuItems];
     this.titleMenuItems = this.titleMenuColumns.flat();
     this.titleMenuColumns.forEach((items, column) => items.forEach((item, row) => {
       item.column = column;
       item.row = row;
     }));
-    this.titleSelectionColumn = 0;
+    this.titleSelectionColumn = 1;
     this.titleSelectionRow = 0;
     this.updateTitleMenuSelection();
     this.createParallelControls(startDungeon, dungeonOptions);
-    this.add.text(GAME_WIDTH / 2, 708, '十字キー: 選択    Zキー: 決定', {
+    this.add.text(GAME_WIDTH / 2, 736, '十字キー: 選択    Zキー: 決定', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '22px',
       color: '#f3f1e8',
@@ -640,6 +710,13 @@ class TitleScene extends Phaser.Scene {
   updateTitleMenuSelection() {
     this.titleMenuItems.forEach((item) => {
       const selected = item.column === this.titleSelectionColumn && item.row === this.titleSelectionRow;
+      if (item.disabled) {
+        item.background.setFillStyle(selected ? 0x182831 : 0x101820);
+        item.background.setStrokeStyle(2, selected ? 0xffdc4a : 0x273946);
+        item.text.setColor(selected ? '#9ab5c7' : '#64717b');
+        item.subtitleText?.setColor('#64717b');
+        return;
+      }
       item.background.setFillStyle(selected ? 0x4d6875 : 0x384d58);
       item.background.setStrokeStyle(2, selected ? 0xffdc4a : 0x6e8996);
       item.text.setColor(selected ? '#ffdc4a' : '#f3f1e8');
@@ -654,12 +731,23 @@ class TitleScene extends Phaser.Scene {
   moveTitleMenuSelection(code) {
     if (code === 'ArrowUp' || code === 'ArrowDown') {
       const items = this.titleMenuColumns[this.titleSelectionColumn];
-      this.titleSelectionRow = (this.titleSelectionRow + (code === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+      const direction = code === 'ArrowUp' ? -1 : 1;
+      for (let offset = 1; offset <= items.length; offset += 1) {
+        const row = (this.titleSelectionRow + direction * offset + items.length) % items.length;
+        if (!items[row].disabled) {
+          this.titleSelectionRow = row;
+          return;
+        }
+      }
       return;
     }
-    this.titleSelectionColumn = (this.titleSelectionColumn + (code === 'ArrowLeft' ? -1 : 1) + this.titleMenuColumns.length)
+    const column = (this.titleSelectionColumn + (code === 'ArrowLeft' ? -1 : 1) + this.titleMenuColumns.length)
       % this.titleMenuColumns.length;
-    this.titleSelectionRow = Math.min(this.titleSelectionRow, this.titleMenuColumns[this.titleSelectionColumn].length - 1);
+    const row = Math.min(this.titleSelectionRow, this.titleMenuColumns[column].length - 1);
+    if (!this.titleMenuColumns[column][row].disabled) {
+      this.titleSelectionColumn = column;
+      this.titleSelectionRow = row;
+    }
   }
 
   openOptionsMenu() {
