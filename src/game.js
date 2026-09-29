@@ -536,11 +536,30 @@ class DungeonTestScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-V', this.onMapOverlayKeyDown);
     this.input.keyboard.on('keyup-V', this.onMapOverlayKeyUp);
     this.input.keyboard.on('keydown', this.onGameKeyDown);
+    this.gameFontLoadingHandler = () => this.refreshGameFonts();
+    document.fonts?.addEventListener('loadingdone', this.gameFontLoadingHandler);
+    document.fonts?.ready?.then(() => this.refreshGameFonts());
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown-V', this.onMapOverlayKeyDown);
       this.input.keyboard.off('keyup-V', this.onMapOverlayKeyUp);
       this.input.keyboard.off('keydown', this.onGameKeyDown);
+      document.fonts?.removeEventListener('loadingdone', this.gameFontLoadingHandler);
     });
+  }
+
+  refreshGameFonts() {
+    if (!this.sys.isActive()) {
+      return;
+    }
+    const refreshText = (child) => {
+      if (child.type === 'Text' && child.style.fontFamily.includes('Yusei Magic')) {
+        child.setFontFamily('sans-serif');
+        child.setFontFamily('Yusei Magic, sans-serif');
+        child.setText(child.text);
+      }
+      child.list?.forEach(refreshText);
+    };
+    this.children.list.forEach(refreshText);
   }
 
   playSfx(key, config) {
@@ -3571,18 +3590,25 @@ class DungeonTestScene extends Phaser.Scene {
       this.isHeroMoving = true;
       this.idleTween.stop();
       this.hero.setScale(HERO_SCALE);
-      const playerAttacks = [this.playerAttack(enemy)];
-      if (
-        (
-          this.hasEquipEffect(ITEM_EQUIP_EFFECT_ALWAYS_DOUBLE_ATTACK)
-          || (
-            this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK)
-            && Math.random() < WINDRUNNER_DOUBLE_ATTACK_CHANCE
-          )
+      const hasDoubleAttackEffect = this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK);
+      const hasAlwaysDoubleAttackEffect = this.hasEquipEffect(ITEM_EQUIP_EFFECT_ALWAYS_DOUBLE_ATTACK);
+      const doubleAttackTriggered = hasAlwaysDoubleAttackEffect || (
+        hasDoubleAttackEffect
+        && this.playerStatus.tryEquipmentEffect(
+          ITEM_EQUIP_EFFECT_DOUBLE_ATTACK,
+          WINDRUNNER_DOUBLE_ATTACK_CHANCE,
         )
-        && enemy.hitPoints > 0
-      ) {
+      );
+      const playerAttacks = [this.playerAttack(enemy)];
+      if (doubleAttackTriggered && enemy.hitPoints > 0) {
         playerAttacks.push(this.playerAttack(enemy));
+      }
+      if (hasDoubleAttackEffect && !doubleAttackTriggered) {
+        if (enemy.hitPoints > 0) {
+          this.playerStatus.recordEquipmentEffectFailure(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK);
+        } else {
+          this.playerStatus.resetEquipmentEffectFailures(ITEM_EQUIP_EFFECT_DOUBLE_ATTACK);
+        }
       }
       this.resolvePlayerTurn(false);
       const enemyTurn = this.resolveEnemyTurnAfterPlayerAction();
@@ -3847,6 +3873,10 @@ class DungeonTestScene extends Phaser.Scene {
 
   playerAttack(enemy, ranged = false) {
     this.wakeSpawnSleepingEnemy(enemy);
+    const hasSlowAttackEffect = !ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK);
+    const hasParalyzeAttackEffect = !ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK);
+    let slowAttackTriggered = false;
+    let paralyzeAttackTriggered = false;
     const rangedAttackBonus = !ranged
       ? 0
       : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATEST_RANGED_ATTACK_INCREASE)
@@ -3880,11 +3910,14 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('ITEM_BLACK_FORMAL_DAMAGE', { damage: additionalDamage });
       }
       if (
-        !ranged
+        hasSlowAttackEffect
         && enemy.hitPoints > 0
-        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK)
-        && Math.random() < EQUIPMENT_STATUS_ATTACK_CHANCE
+        && this.playerStatus.tryEquipmentEffect(
+          ITEM_EQUIP_EFFECT_SLOW_ATTACK,
+          EQUIPMENT_STATUS_ATTACK_CHANCE,
+        )
       ) {
+        slowAttackTriggered = true;
         if (enemy.speedTurns > 0) {
           enemy.speedTurns = 0;
         } else {
@@ -3894,12 +3927,15 @@ class DungeonTestScene extends Phaser.Scene {
         }
       }
       if (
-        !ranged
+        hasParalyzeAttackEffect
         && enemy.hitPoints > 0
-        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK)
         && enemy.paralysisTurns === 0
-        && Math.random() < EQUIPMENT_STATUS_ATTACK_CHANCE
+        && this.playerStatus.tryEquipmentEffect(
+          ITEM_EQUIP_EFFECT_PARALYZE_ATTACK,
+          EQUIPMENT_STATUS_ATTACK_CHANCE,
+        )
       ) {
+        paralyzeAttackTriggered = true;
         enemy.paralysisTurns = PARALYSIS_TURN_COUNT;
         this.actionLog.add('ENEMY_PARALYZED', { enemy: this.getEnemyLogName(enemy) });
       }
@@ -3916,6 +3952,19 @@ class DungeonTestScene extends Phaser.Scene {
       this.playSfx('se-miss');
       this.actionLog.add('PLAYER_MISS', { enemy: this.getEnemyLogName(enemy) });
     }
+    [
+      [ITEM_EQUIP_EFFECT_SLOW_ATTACK, hasSlowAttackEffect, slowAttackTriggered],
+      [ITEM_EQUIP_EFFECT_PARALYZE_ATTACK, hasParalyzeAttackEffect, paralyzeAttackTriggered],
+    ].forEach(([effectId, equipped, triggered]) => {
+      if (!equipped || triggered) {
+        return;
+      }
+      if (enemy.hitPoints > 0) {
+        this.playerStatus.recordEquipmentEffectFailure(effectId);
+      } else {
+        this.playerStatus.resetEquipmentEffectFailures(effectId);
+      }
+    });
     const survived = hit && this.applyEnemySurvivalAbility(enemy, !ranged);
     const delayedLogs = [];
     const addHitLog = (key, values, effect = null) => {

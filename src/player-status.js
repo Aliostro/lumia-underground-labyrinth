@@ -27,6 +27,7 @@ class PlayerStatus {
     this.trapAvoidance = false;
     this.confusionImmunity = false;
     this.equipmentMaxHitPointBonus = 0;
+    this.equipmentEffectFailures = {};
     this.inventory = [];
     this.inventoryCapacity = 20;
   }
@@ -61,12 +62,41 @@ class PlayerStatus {
       [ITEM_EQUIP_EFFECT_MAX_HIT_POINTS]: 15,
       [ITEM_EQUIP_EFFECT_GREATER_MAX_HIT_POINTS]: 30,
     }[definition.equipEffectId] ?? 0;
+    this.resetEquipmentEffectFailures();
     this.updateEquipmentStats();
   }
 
   unequipItem(item) {
     item.equipped = null;
+    this.resetEquipmentEffectFailures();
     this.updateEquipmentStats();
+  }
+
+  getEquipmentEffectChance(effectId, baseChance) {
+    const failures = this.equipmentEffectFailures?.[effectId] ?? 0;
+    return Math.min(1, baseChance * (failures + 1));
+  }
+
+  tryEquipmentEffect(effectId, baseChance) {
+    if (Math.random() >= this.getEquipmentEffectChance(effectId, baseChance)) {
+      return false;
+    }
+    this.resetEquipmentEffectFailures(effectId);
+    return true;
+  }
+
+  recordEquipmentEffectFailure(effectId) {
+    this.equipmentEffectFailures ??= {};
+    this.equipmentEffectFailures[effectId] = (this.equipmentEffectFailures[effectId] ?? 0) + 1;
+  }
+
+  resetEquipmentEffectFailures(effectId = null) {
+    if (effectId == null) {
+      this.equipmentEffectFailures = {};
+      return;
+    }
+    this.equipmentEffectFailures ??= {};
+    this.equipmentEffectFailures[effectId] = 0;
   }
 
   updateEquipmentStats() {
