@@ -226,6 +226,7 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-use', 'assets/audio/SEUse.mp3');
     this.load.audio('se-violin', 'assets/audio/SEViolin.mp3');
     this.load.audio('se-wana-set', 'assets/audio/SEWanaSet.mp3');
+    this.load.audio('se-water', 'assets/audio/SEWater.mp3');
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
     this.load.text('version-data', `assets/data/version.txt?v=${Date.now()}`);

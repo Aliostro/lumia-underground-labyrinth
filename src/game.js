@@ -96,6 +96,8 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('Chara0047a.png', 'assets/image/Chara0047a.png');
     this.load.image('Chara0048.png', 'assets/image/Chara0048.png');
     this.load.image('Chara0049.png', 'assets/image/Chara0049.png');
+    this.load.image('Chara0050.png', 'assets/image/Chara0050.png');
+    this.load.image('Chara0051.png', 'assets/image/Chara0051.png');
     this.load.image('Chara9000.png', 'assets/image/Chara9000.png');
     this.load.image('Chara9001.png', 'assets/image/Chara9001.png');
     this.load.image('Chara9900.png', 'assets/image/Chara9900.png');
@@ -878,7 +880,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     const heroInWater = this.dungeonTiles[this.heroTileY]?.[this.heroTileX] === WATER_TILE;
     const enemiesInWater = this.enemies.filter((enemy) => (
-      this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE && !this.isEva(enemy)
+      this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE && !this.canEnemyStandOnWater(enemy)
     ));
     if (!heroInWater && enemiesInWater.length === 0) {
       return;
@@ -920,7 +922,10 @@ class DungeonTestScene extends Phaser.Scene {
       }
     }
     this.enemies.forEach((enemy) => {
-      if (this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE || this.isEva(enemy)) {
+      if (
+        this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE
+        || this.canEnemyStandOnWater(enemy)
+      ) {
         return;
       }
       const destination = Phaser.Utils.Array.GetRandom(findDestination(enemy));
@@ -3519,7 +3524,7 @@ class DungeonTestScene extends Phaser.Scene {
     const currentRoom = this.getRoomAt(this.heroTileX, this.heroTileY);
     const nextRoom = this.getRoomAt(nextX, nextY);
     const isDashing = this.dashDirection != null;
-    const isWaterEva = destination === WATER_TILE && this.isEva(enemy);
+    const isWaterEnemy = destination === WATER_TILE && this.canEnemyStandOnWater(enemy);
 
     if (
       destination === 0
@@ -3556,7 +3561,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
 
     if (
-      (!this.isWalkableTile(destination) && !isWaterEva)
+      (!this.isWalkableTile(destination) && !isWaterEnemy)
       || !this.canMoveDiagonally(offsetX, offsetY)
     ) {
       this.dashDirection = null;
@@ -4200,6 +4205,9 @@ class DungeonTestScene extends Phaser.Scene {
       if (enemy.alonsoPullCooldown > 0) {
         enemy.alonsoPullCooldown -= 1;
       }
+      if (enemy.leonSubmergeCooldown > 0) {
+        enemy.leonSubmergeCooldown -= 1;
+      }
       if (enemy.speedTurns > 0) {
         enemy.speedTurns -= 1;
       }
@@ -4294,6 +4302,9 @@ class DungeonTestScene extends Phaser.Scene {
       if (this.useAlonsoPull(enemy)) {
         continue;
       }
+      if (this.resolveLenoxFishing(enemy)) {
+        continue;
+      }
       const sisselaPainRelease = this.createSisselaPainRelease(enemy);
       if (sisselaPainRelease) {
         attacks.push(sisselaPainRelease);
@@ -4356,6 +4367,11 @@ class DungeonTestScene extends Phaser.Scene {
         movements.push(lauraTheftMovement);
         continue;
       }
+      const leonSubmerge = this.resolveLeonSubmerge(enemy);
+      if (leonSubmerge) {
+        movements.push(leonSubmerge);
+        continue;
+      }
       const specialMovement = this.resolveEnemySpecialMovement(enemy);
       if (specialMovement) {
         movements.push(specialMovement);
@@ -4393,6 +4409,7 @@ class DungeonTestScene extends Phaser.Scene {
       let movesTaken = 0;
       while (
         enemy.specialAbilityId !== ENEMY_SKILL_PREVENT_ROOM_EXIT
+        && !enemy.lenoxFishing
         && movesTaken < this.getEnemyMovementCount(enemy)
         && (
           this.isMartinaSummoner(enemy)
@@ -4475,6 +4492,78 @@ class DungeonTestScene extends Phaser.Scene {
       return true;
     }
     this.applyAlonsoPull(enemy, destination);
+    return true;
+  }
+
+  resolveLenoxFishing(enemy) {
+    if (!LENOX_FISHING_SKILL_IDS.includes(enemy.specialAbilityId)) {
+      return false;
+    }
+    const isCoolingDown = enemy.lenoxFishingCooldown > 0;
+    if (isCoolingDown) {
+      enemy.lenoxFishingCooldown -= 1;
+    }
+    const isNearWater = MOVE_DIRECTIONS.some((direction) => (
+      this.dungeonTiles[enemy.tileY + direction.y]?.[enemy.tileX + direction.x] === WATER_TILE
+    ));
+    if (!isNearWater) {
+      enemy.lenoxFishing = false;
+    } else if (!enemy.lenoxFishing) {
+      enemy.lenoxFishing = true;
+      this.actionLog.add('ENEMY_LENOX_FISHING', { enemy: this.getEnemyLogName(enemy) });
+    }
+    if (isCoolingDown) {
+      return false;
+    }
+    const ranges = {
+      [ENEMY_SKILL_LENOX_FISHING]: 3,
+      [ENEMY_SKILL_GOLD_LENOX_FISHING]: 5,
+      [ENEMY_SKILL_MITHRIL_LENOX_FISHING]: 7,
+      [ENEMY_SKILL_ETA_LENOX_FISHING]: Infinity,
+    };
+    const offsetX = this.heroTileX - enemy.tileX;
+    const offsetY = this.heroTileY - enemy.tileY;
+    const distance = Math.max(Math.abs(offsetX), Math.abs(offsetY));
+    const isStraightLine = offsetX === 0
+      || offsetY === 0
+      || Math.abs(offsetX) === Math.abs(offsetY);
+    if (distance < 2 || distance > ranges[enemy.specialAbilityId] || !isStraightLine) {
+      return false;
+    }
+    const direction = { x: Math.sign(offsetX), y: Math.sign(offsetY) };
+    for (let step = 1; step <= distance; step += 1) {
+      const tileX = enemy.tileX + direction.x * step;
+      const tileY = enemy.tileY + direction.y * step;
+      if (!this.isProjectilePassableTile(this.dungeonTiles[tileY]?.[tileX])) {
+        return false;
+      }
+    }
+    const destination = this.findHeroShortestPathStep(enemy);
+    if (!destination) {
+      return false;
+    }
+    enemy.lenoxFishingCooldown = LENOX_FISHING_COOLDOWN_TURNS;
+    if (this.preventEnemyForcedMovement()) {
+      this.actionLog.add('ENEMY_LENOX_CAUGHT', { enemy: this.getEnemyLogName(enemy) });
+      return true;
+    }
+    this.heroTileX = destination.x;
+    this.heroTileY = destination.y;
+    this.dashDirection = null;
+    this.alonsoPullTarget = {
+      x: (destination.x + 0.5) * TILE_SIZE,
+      y: (destination.y + 1) * TILE_SIZE,
+    };
+    this.updateHeroDepth(destination.y);
+    this.setHeroEnteredRoom(this.getRoomAt(destination.x, destination.y));
+    this.updateVisibility();
+    this.drawMinimapMarker();
+    this.playerStatus.slowTurns = SLOW_TURN_COUNT;
+    this.playerStatus.slowSkipNextTurn = true;
+    this.playSfx('se-water');
+    this.playEnemyWarpSfx();
+    this.actionLog.add('ENEMY_LENOX_CAUGHT', { enemy: this.getEnemyLogName(enemy) });
+    this.actionLog.add('PLAYER_SLOWED');
     return true;
   }
 
@@ -5314,7 +5403,11 @@ class DungeonTestScene extends Phaser.Scene {
             return;
           }
           if (hit) {
-            const baseDamage = Math.max(1, enemy.attack - this.playerStatus.defense);
+            const attackPower = (
+              enemy.specialAbilityId === ENEMY_SKILL_LEON_SUBMERGE
+              && this.dungeonTiles[enemy.tileY]?.[enemy.tileX] === WATER_TILE
+            ) ? Math.ceil(enemy.attack * 1.5) : enemy.attack;
+            const baseDamage = Math.max(1, attackPower - this.playerStatus.defense);
             const criticalHit = enemy.specialAbilityId === ENEMY_SKILL_MARKUS_CRITICAL_HIT
               && Math.random() < MARKUS_CRITICAL_HIT_CHANCE;
             this.playSfx(criticalHit ? 'se-enemy-attack-crit' : 'se-enemy-attack');
@@ -6729,6 +6822,63 @@ class DungeonTestScene extends Phaser.Scene {
     return movement;
   }
 
+  resolveLeonSubmerge(enemy) {
+    if (
+      enemy.specialAbilityId !== ENEMY_SKILL_LEON_SUBMERGE
+      || enemy.leonSubmergeCooldown > 0
+    ) {
+      return null;
+    }
+    const waterTiles = [];
+    this.dungeonTiles.forEach((row, y) => {
+      row.forEach((tile, x) => {
+        if (
+          tile === WATER_TILE
+          && !this.isStairTile(x, y)
+          && !this.isLumiAt(x, y)
+          && !(x === this.heroTileX && y === this.heroTileY)
+          && !this.enemies.some((otherEnemy) => (
+            otherEnemy !== enemy && otherEnemy.tileX === x && otherEnemy.tileY === y
+          ))
+        ) {
+          waterTiles.push({ x, y });
+        }
+      });
+    });
+    if (waterTiles.length === 0) {
+      return null;
+    }
+    const distanceToHero = (tile) => Math.max(
+      Math.abs(tile.x - this.heroTileX),
+      Math.abs(tile.y - this.heroTileY),
+    );
+    const nearestDistance = Math.min(...waterTiles.map(distanceToHero));
+    const destinations = waterTiles.filter((tile) => distanceToHero(tile) === nearestDistance);
+    const destination = Phaser.Utils.Array.GetRandom(destinations);
+    if (!destination || (destination.x === enemy.tileX && destination.y === enemy.tileY)) {
+      return null;
+    }
+    const movement = {
+      enemy,
+      fromX: enemy.sprite.x,
+      fromY: enemy.sprite.y,
+      toX: (destination.x + 0.5) * TILE_SIZE,
+      toY: (destination.y + 1) * TILE_SIZE,
+    };
+    enemy.idleTween?.stop();
+    enemy.sprite.setScale(ENEMY_SCALE);
+    enemy.needsIdleMotion = true;
+    enemy.tileX = destination.x;
+    enemy.tileY = destination.y;
+    enemy.leonSubmergeCooldown = LEON_SUBMERGE_COOLDOWN_TURNS;
+    this.playSfx('se-water');
+    this.playEnemyWarpSfx();
+    this.updateCharacterDepth(enemy.sprite, destination.y);
+    this.updateEnemySymbolDepth(enemy);
+    this.actionLog.add('ENEMY_LEON_SUBMERGED', { enemy: this.getEnemyLogName(enemy) });
+    return movement;
+  }
+
   resolveMartinaAction(enemy) {
     if (!this.isMartinaSummoner(enemy) || !this.isEnemyAdjacent(enemy)) {
       return null;
@@ -7049,6 +7199,41 @@ class DungeonTestScene extends Phaser.Scene {
     return null;
   }
 
+  findHeroShortestPathStep(target) {
+    const queue = [{ x: this.heroTileX, y: this.heroTileY, firstStep: null }];
+    const visited = new Set([`${this.heroTileX},${this.heroTileY}`]);
+    const maximumVisitedTiles = 256;
+
+    for (let index = 0; index < queue.length && index < maximumVisitedTiles; index += 1) {
+      const current = queue[index];
+      for (const direction of MOVE_DIRECTIONS) {
+        const nextX = current.x + direction.x;
+        const nextY = current.y + direction.y;
+        const key = `${nextX},${nextY}`;
+        if (visited.has(key)) {
+          continue;
+        }
+        if (nextX === target.tileX && nextY === target.tileY) {
+          return { x: current.x, y: current.y };
+        }
+        if (
+          !this.isWalkableTile(this.dungeonTiles[nextY]?.[nextX])
+          || !this.canMoveFrom(current.x, current.y, direction.x, direction.y)
+          || this.isTileOccupied(nextX, nextY)
+        ) {
+          continue;
+        }
+        visited.add(key);
+        queue.push({
+          x: nextX,
+          y: nextY,
+          firstStep: current.firstStep || { x: nextX, y: nextY },
+        });
+      }
+    }
+    return null;
+  }
+
   canMoveFrom(tileX, tileY, offsetX, offsetY) {
     if (offsetX === 0 || offsetY === 0) {
       return true;
@@ -7076,6 +7261,10 @@ class DungeonTestScene extends Phaser.Scene {
     return enemy?.specialAbilityId === ENEMY_SKILL_PHASE_THROUGH_WALLS;
   }
 
+  canEnemyStandOnWater(enemy) {
+    return this.isEva(enemy) || enemy?.specialAbilityId === ENEMY_SKILL_LEON_SUBMERGE;
+  }
+
   getEnemyVisibleTiles(enemy) {
     const visibleTiles = this.getVisibleTiles(enemy.tileX, enemy.tileY);
     if (!this.isEva(enemy)) {
@@ -7093,7 +7282,11 @@ class DungeonTestScene extends Phaser.Scene {
 
   canEnemyEnterTile(enemy, tileX, tileY) {
     const tile = this.dungeonTiles[tileY]?.[tileX];
-    return tile !== undefined && (this.isWalkableTile(tile) || this.isEva(enemy));
+    return tile !== undefined && (
+      this.isWalkableTile(tile)
+      || this.isEva(enemy)
+      || (tile === WATER_TILE && this.canEnemyStandOnWater(enemy))
+    );
   }
 
   canEnemyPassBetweenTiles(enemy, tileX, tileY, offsetX, offsetY) {
