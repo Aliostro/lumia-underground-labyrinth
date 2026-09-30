@@ -30,6 +30,11 @@ class DungeonGenerator {
   }
 
   createDungeon(waterChance, minimumPonds, maximumPonds) {
+    const layoutRoll = this.random();
+    if (layoutRoll < 0.05) {
+      return this.createRingDungeon(waterChance, minimumPonds, maximumPonds);
+    }
+
     const tiles = Array.from(
       { length: this.height },
       () => Array(this.width).fill(0),
@@ -40,23 +45,124 @@ class DungeonGenerator {
       this.carveRoom(tiles, room);
     }
 
-    const connectedRooms = [rooms[0]];
-    const unconnectedRooms = rooms.slice(1);
+    if (layoutRoll < 0.525) {
+      const routeRooms = this.createLoopRoute(rooms);
+      for (let index = 1; index < routeRooms.length; index += 1) {
+        this.carveCorridor(tiles, routeRooms[index - 1], routeRooms[index]);
+      }
+      this.carveCorridor(tiles, routeRooms[routeRooms.length - 1], routeRooms[0]);
+      this.carveLoopBranch(tiles, routeRooms);
+    } else {
+      const connectedRooms = [rooms[0]];
+      const unconnectedRooms = rooms.slice(1);
 
-    while (unconnectedRooms.length > 0) {
-      const nextRoomIndex = this.randomInt(0, unconnectedRooms.length - 1);
-      const nextRoom = unconnectedRooms.splice(nextRoomIndex, 1)[0];
-      const nearestRoom = connectedRooms.reduce((closest, room) => (
-        this.distance(room, nextRoom) < this.distance(closest, nextRoom) ? room : closest
-      ));
+      while (unconnectedRooms.length > 0) {
+        const nextRoomIndex = this.randomInt(0, unconnectedRooms.length - 1);
+        const nextRoom = unconnectedRooms.splice(nextRoomIndex, 1)[0];
+        const nearestRoom = connectedRooms.reduce((closest, room) => (
+          this.distance(room, nextRoom) < this.distance(closest, nextRoom) ? room : closest
+        ));
 
-      this.carveCorridor(tiles, nearestRoom, nextRoom);
-      connectedRooms.push(nextRoom);
+        this.carveCorridor(tiles, nearestRoom, nextRoom);
+        connectedRooms.push(nextRoom);
+      }
     }
 
     this.placeWater(tiles, rooms, waterChance);
     this.placePonds(tiles, minimumPonds, maximumPonds);
     return { tiles, rooms };
+  }
+
+  createRingDungeon(waterChance, minimumPonds, maximumPonds) {
+    const tiles = Array.from(
+      { length: this.height },
+      () => Array(this.width).fill(0),
+    );
+    const rooms = this.createRingRooms();
+
+    for (const room of rooms) {
+      this.carveRoom(tiles, room);
+    }
+
+    for (const [fromIndex, toIndex] of [[0, 1], [1, 3], [3, 2], [2, 0]]) {
+      this.carveRingCorridor(tiles, rooms[fromIndex], rooms[toIndex]);
+    }
+
+    this.placeWater(tiles, rooms, waterChance);
+    this.placePonds(tiles, minimumPonds, maximumPonds);
+    return { tiles, rooms };
+  }
+
+  createRingRooms() {
+    const roomPositions = [[2, 2], [35, 2], [2, 35], [35, 35]];
+    return roomPositions.map(([x, y]) => {
+      const roomSize = this.randomInt(15, 26);
+      return {
+        x,
+        y,
+        width: roomSize,
+        height: roomSize,
+        centerX: x + Math.floor(roomSize / 2),
+        centerY: y + Math.floor(roomSize / 2),
+      };
+    });
+  }
+
+  carveRingCorridor(tiles, fromRoom, toRoom) {
+    for (const tile of this.createRingCorridorPath(fromRoom, toRoom)) {
+      if (tiles[tile.y][tile.x] === 0) {
+        tiles[tile.y][tile.x] = 2;
+      }
+    }
+  }
+
+  createRingCorridorPath(fromRoom, toRoom) {
+    const isHorizontal = Math.abs(fromRoom.centerX - toRoom.centerX)
+      > Math.abs(fromRoom.centerY - toRoom.centerY);
+    const points = isHorizontal
+      ? this.createHorizontalRingPath(fromRoom, toRoom)
+      : this.createVerticalRingPath(fromRoom, toRoom);
+    const path = [];
+
+    for (let index = 1; index < points.length; index += 1) {
+      path.push(...this.createLine(points[index - 1].x, points[index - 1].y, points[index].x, points[index].y)
+        .slice(index === 1 ? 0 : 1));
+    }
+    return path;
+  }
+
+  createHorizontalRingPath(fromRoom, toRoom) {
+    const direction = Math.sign(toRoom.centerX - fromRoom.centerX);
+    const firstBendX = direction > 0 ? fromRoom.x + fromRoom.width + 2 : fromRoom.x - 3;
+    const secondBendX = direction > 0 ? toRoom.x - 3 : toRoom.x + toRoom.width + 2;
+    const middleY = fromRoom.centerY < this.height / 2
+      ? Math.max(fromRoom.centerY, toRoom.centerY) + 4
+      : Math.min(fromRoom.centerY, toRoom.centerY) - 4;
+    return [
+      { x: fromRoom.centerX, y: fromRoom.centerY },
+      { x: firstBendX, y: fromRoom.centerY },
+      { x: firstBendX, y: middleY },
+      { x: secondBendX, y: middleY },
+      { x: secondBendX, y: toRoom.centerY },
+      { x: toRoom.centerX, y: toRoom.centerY },
+    ];
+  }
+
+  createVerticalRingPath(fromRoom, toRoom) {
+    const direction = Math.sign(toRoom.centerY - fromRoom.centerY);
+    const firstBendY = direction > 0 ? fromRoom.y + fromRoom.height + 2 : fromRoom.y - 3;
+    const secondBendY = direction > 0 ? toRoom.y - 3 : toRoom.y + toRoom.height + 2;
+    const middleX = fromRoom.centerX < this.width / 2
+      ? Math.max(fromRoom.centerX, toRoom.centerX) + 4
+      : Math.min(fromRoom.centerX, toRoom.centerX) - 4;
+    return [
+      { x: fromRoom.centerX, y: fromRoom.centerY },
+      { x: fromRoom.centerX, y: firstBendY },
+      { x: middleX, y: firstBendY },
+      { x: middleX, y: secondBendY },
+      { x: toRoom.centerX, y: secondBendY },
+      { x: toRoom.centerX, y: toRoom.centerY },
+    ];
   }
 
   placePonds(tiles, minimumPonds, maximumPonds) {
@@ -243,11 +349,14 @@ class DungeonGenerator {
       throw new Error('通路を配置できません。');
     }
 
+    let carvedTiles = 0;
     for (const tile of path) {
       if (tiles[tile.y][tile.x] === 0) {
         tiles[tile.y][tile.x] = 2;
+        carvedTiles += 1;
       }
     }
+    return carvedTiles > 0;
   }
 
   createCorridorPath(fromRoom, toRoom, isHorizontalFirst) {
@@ -358,6 +467,48 @@ class DungeonGenerator {
 
   distance(first, second) {
     return Math.abs(first.centerX - second.centerX) + Math.abs(first.centerY - second.centerY);
+  }
+
+  createLoopRoute(rooms) {
+    const unvisitedRooms = [...rooms];
+    const routeRooms = [unvisitedRooms.splice(this.randomInt(0, unvisitedRooms.length - 1), 1)[0]];
+
+    while (unvisitedRooms.length > 0) {
+      const currentRoom = routeRooms[routeRooms.length - 1];
+      const nextRoomIndex = unvisitedRooms.reduce((nearestIndex, room, index) => (
+        this.distance(currentRoom, room) < this.distance(currentRoom, unvisitedRooms[nearestIndex])
+          ? index
+          : nearestIndex
+      ), 0);
+      routeRooms.push(unvisitedRooms.splice(nextRoomIndex, 1)[0]);
+    }
+
+    return routeRooms;
+  }
+
+  carveLoopBranch(tiles, routeRooms) {
+    const candidates = [];
+    for (let fromIndex = 0; fromIndex < routeRooms.length; fromIndex += 1) {
+      for (let toIndex = fromIndex + 2; toIndex < routeRooms.length; toIndex += 1) {
+        if (fromIndex === 0 && toIndex === routeRooms.length - 1) {
+          continue;
+        }
+        candidates.push({ from: routeRooms[fromIndex], to: routeRooms[toIndex] });
+      }
+    }
+    candidates.sort((first, second) => this.distance(first.from, first.to) - this.distance(second.from, second.to));
+
+    for (const candidate of candidates) {
+      try {
+        if (this.carveCorridor(tiles, candidate.from, candidate.to)) {
+          return;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    throw new Error('一筆書きルートの分岐を配置できません。');
   }
 
   randomInt(minimum, maximum) {

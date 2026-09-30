@@ -5,7 +5,7 @@ max-enemies   = 60
 
 start-level   = 1
 start-floor   = 1
-start-item    = 4004
+start-item    = 4004, 5015
 
 [design-map]
 0001: 0001 [0, 0]
