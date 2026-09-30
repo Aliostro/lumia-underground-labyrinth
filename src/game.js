@@ -371,13 +371,13 @@ class DungeonTestScene extends Phaser.Scene {
       }
       if (this.recipeBook.container.visible) {
         if (this.recipeBook.handleInput(event.code)) {
-          this.playSfx(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.playSfx(event.code === 'KeyZ' ? 'se-cursor-enter' : ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
       if (this.enemyBook.container.visible) {
         if (this.enemyBook.handleInput(event.code)) {
-          this.playSfx(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.playSfx(event.code === 'KeyZ' ? 'se-cursor-enter' : ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
@@ -1212,6 +1212,32 @@ class DungeonTestScene extends Phaser.Scene {
     ));
   }
 
+  getSlowPreventionEquipmentName() {
+    const slowPreventionEffectIds = [
+      ITEM_EQUIP_EFFECT_SLOW_ATTACK,
+      ITEM_EQUIP_EFFECT_SLOW_IMMUNITY,
+    ];
+    for (const category of [0, 20, 30]) {
+      const item = this.playerStatus.inventory.find((inventoryItem) => {
+        const definition = this.itemDefinitions.get(inventoryItem.id);
+        return (
+          inventoryItem.equipped === category
+          && slowPreventionEffectIds.includes(definition?.equipEffectId)
+        );
+      });
+      if (item) {
+        return this.itemDefinitions.get(item.id)?.name ?? null;
+      }
+    }
+    return null;
+  }
+
+  logSlowPrevention(itemName) {
+    if (itemName) {
+      this.actionLog.add('PLAYER_SLOW_PREVENTED', { item: itemName });
+    }
+  }
+
   hasDanielVisionEffect(room) {
     return this.enemies.some((enemy) => (
       enemy.specialAbilityId === ENEMY_SKILL_DANIEL_LIMITS_VISION
@@ -1857,10 +1883,9 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('PLAYER_HASTE_ENDED');
         return;
       }
-      if (
-        this.playerStatus.slowTurns > 0
-        || this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_IMMUNITY)
-      ) {
+      const slowPreventionItemName = this.getSlowPreventionEquipmentName();
+      if (this.playerStatus.slowTurns > 0 || slowPreventionItemName) {
+        this.logSlowPrevention(slowPreventionItemName);
         return;
       }
       this.playerStatus.slowTurns = SLOW_TURN_COUNT;
@@ -3170,6 +3195,12 @@ class DungeonTestScene extends Phaser.Scene {
     return baseDamage;
   }
 
+  getElectricAndLaserDamage(baseDamage) {
+    return this.hasEquipEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK)
+      ? Math.ceil(baseDamage * 0.5)
+      : baseDamage;
+  }
+
   getExplosionDamage(baseDamage) {
     if (this.fireproofCapeActive) {
       this.actionLog.add('PLAYER_EXPLOSION_IMMUNE');
@@ -3213,11 +3244,6 @@ class DungeonTestScene extends Phaser.Scene {
   applyEnemyDamage(enemy, damage) {
     const actualDamage = Math.min(enemy.hitPoints, damage);
     enemy.hitPoints -= damage;
-    if (actualDamage > 0 && enemy.paralysisTurns > 0) {
-      enemy.paralysisTurns = 0;
-      enemy.paralysisText.setVisible(false);
-      this.actionLog.add('ENEMY_PARALYSIS_ENDED', { enemy: this.getEnemyLogName(enemy) });
-    }
     if (actualDamage > 0) {
       this.warpCharlotteToHealEnemy(enemy);
     }
@@ -3895,6 +3921,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.wakeSpawnSleepingEnemy(enemy);
     const hasSlowAttackEffect = !ranged && this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_SLOW_ATTACK);
     const hasParalyzeAttackEffect = !ranged && this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_PARALYZE_ATTACK);
+    const hasAlwaysHitEffect = !ranged && this.hasEquippedWeaponEffect(ITEM_EQUIP_EFFECT_ALWAYS_HIT);
     let slowAttackTriggered = false;
     let paralyzeAttackTriggered = false;
     const rangedAttackBonus = !ranged
@@ -3905,14 +3932,20 @@ class DungeonTestScene extends Phaser.Scene {
         ? 10
         : this.hasEquipEffect(ITEM_EQUIP_EFFECT_RANGED_ATTACK_INCREASE) ? 5 : 0;
     const damage = Math.max(1, this.playerStatus.attack + rangedAttackBonus - enemy.defense);
-    const hit = !ranged || !this.evadesProjectile(enemy)
+    const hit = hasAlwaysHitEffect || (!ranged || !this.evadesProjectile(enemy)
       ? this.isAttackHit(NORMAL_ATTACK_ACCURACY)
-      : false;
+      : false);
     if (hit) {
+      const wasParalyzed = enemy.paralysisTurns > 0;
       if (!ranged) {
         this.playSfx('se-player-attack');
       }
       this.applyEnemyDamage(enemy, damage);
+      if (wasParalyzed) {
+        enemy.paralysisTurns = 0;
+        enemy.paralysisText.setVisible(false);
+        this.actionLog.add('ENEMY_PARALYSIS_ENDED', { enemy: this.getEnemyLogName(enemy) });
+      }
       if (!ranged) {
         this.actionLog.add('PLAYER_ATTACK', {
           enemy: this.getEnemyLogName(enemy),
@@ -4214,6 +4247,9 @@ class DungeonTestScene extends Phaser.Scene {
       }
       if (enemy.leonSubmergeCooldown > 0) {
         enemy.leonSubmergeCooldown -= 1;
+      }
+      if (enemy.kiaraBrandCooldown > 0) {
+        enemy.kiaraBrandCooldown -= 1;
       }
       if (enemy.speedTurns > 0) {
         enemy.speedTurns -= 1;
@@ -4568,15 +4604,18 @@ class DungeonTestScene extends Phaser.Scene {
     this.setHeroEnteredRoom(this.getRoomAt(destination.x, destination.y));
     this.updateVisibility();
     this.drawMinimapMarker();
+    const slowPreventionItemName = this.getSlowPreventionEquipmentName();
     const playerWasSlowed = this.playerStatus.slowTurns > 0;
-    if (!playerWasSlowed) {
+    if (!playerWasSlowed && !slowPreventionItemName) {
       this.playerStatus.slowTurns = SLOW_TURN_COUNT;
       this.playerStatus.slowSkipNextTurn = true;
     }
     this.playSfx('se-water');
     this.playEnemyWarpSfx();
     this.actionLog.add('ENEMY_LENOX_CAUGHT', { enemy: this.getEnemyLogName(enemy) });
-    if (!playerWasSlowed) {
+    if (slowPreventionItemName) {
+      this.logSlowPrevention(slowPreventionItemName);
+    } else if (!playerWasSlowed) {
       this.actionLog.add('PLAYER_SLOWED');
     }
     return true;
@@ -4932,12 +4971,17 @@ class DungeonTestScene extends Phaser.Scene {
     if (
       !settings
       || !settings.isTargetInRange()
+      || enemy.kiaraBrandCooldown > 0
       || this.playerStatus.brandTurns > 0
       || Math.random() >= settings.chance
     ) {
       return false;
     }
-    this.playerStatus.brandTurns = BRAND_TURN_COUNT;
+    enemy.kiaraBrandCooldown = KIARA_BRAND_COOLDOWN_TURNS;
+    const brandPrevented = this.hasEquipEffect(ITEM_EQUIP_EFFECT_BRAINWASH_AND_BRAND_IMMUNITY);
+    if (!brandPrevented) {
+      this.playerStatus.brandTurns = BRAND_TURN_COUNT;
+    }
     this.updateStatusUi();
     attacks.push({
       sprite: enemy.sprite,
@@ -4946,7 +4990,12 @@ class DungeonTestScene extends Phaser.Scene {
       onStart: (complete) => {
         this.playSfx('se-gravity');
         this.actionLog.add('ENEMY_KIARA_BRAND', { enemy: this.getEnemyLogName(enemy) });
-        this.playKiaraBrandEffect(complete);
+        this.playKiaraBrandEffect(() => {
+          if (brandPrevented) {
+            this.actionLog.add('PLAYER_BLADE_TONFA_PREVENTED_BRAND');
+          }
+          complete();
+        });
       },
     });
     return true;
@@ -4998,7 +5047,10 @@ class DungeonTestScene extends Phaser.Scene {
     ) {
       return false;
     }
-    this.playerStatus.brainwashed = true;
+    const brainwashPrevented = this.hasEquipEffect(ITEM_EQUIP_EFFECT_BRAINWASH_AND_BRAND_IMMUNITY);
+    if (!brainwashPrevented) {
+      this.playerStatus.brainwashed = true;
+    }
     attacks.push({
       sprite: enemy.sprite,
       targetsHero: true,
@@ -5006,7 +5058,12 @@ class DungeonTestScene extends Phaser.Scene {
       onStart: (complete) => {
         this.playSfx('se-gravity');
         this.actionLog.add('ENEMY_ZAHIR_BRAINWASH', { enemy: this.getEnemyLogName(enemy) });
-        this.playZahirBrainwashEffect(complete);
+        this.playZahirBrainwashEffect(() => {
+          if (brainwashPrevented) {
+            this.actionLog.add('PLAYER_BLADE_TONFA_PREVENTED_BRAINWASH');
+          }
+          complete();
+        });
       },
     });
     return true;
@@ -6093,7 +6150,9 @@ class DungeonTestScene extends Phaser.Scene {
         this.playerStatus.confusionTurns = CONFUSION_TURN_COUNT;
         this.actionLog.add('PLAYER_CONFUSED');
       } else if (status === 'slow') {
-        if (this.playerStatus.slowTurns > 0 || this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_IMMUNITY)) {
+        const slowPreventionItemName = this.getSlowPreventionEquipmentName();
+        if (this.playerStatus.slowTurns > 0 || slowPreventionItemName) {
+          this.logSlowPrevention(slowPreventionItemName);
           return;
         }
         this.playerStatus.slowTurns = SLOW_TURN_COUNT;

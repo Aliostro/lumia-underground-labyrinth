@@ -360,7 +360,10 @@ const EnemyAbilities = {
         destroyedWalls.push({ x: tileX, y: tileY });
       }
       if (tileX === this.heroTileX && tileY === this.heroTileY) {
-        const actualDamage = this.applyHeroDamage(damage, this.getEnemyLogName(enemy));
+        const actualDamage = this.applyHeroDamage(
+          this.getElectricAndLaserDamage(damage),
+          this.getEnemyLogName(enemy),
+        );
         this.dashDirection = null;
         this.updateStatusUi();
         this.actionLog.add('ENEMY_JUSTYNA_LASER_HIT_PLAYER', {
@@ -441,7 +444,10 @@ const EnemyAbilities = {
       [ENEMY_SKILL_MITHRIL_AIDEN_ELECTRIC_BURST]: 40,
       [ENEMY_SKILL_ETA_AIDEN_ELECTRIC_BURST]: 50,
     }[enemy.specialAbilityId];
-    const actualDamage = this.applyHeroDamage(damage, this.getEnemyLogName(enemy));
+    const actualDamage = this.applyHeroDamage(
+      this.getElectricAndLaserDamage(damage),
+      this.getEnemyLogName(enemy),
+    );
     this.dashDirection = null;
     this.updateStatusUi();
     this.actionLog.add('ENEMY_AIDEN_ELECTRIC_BURST_HIT_PLAYER', {

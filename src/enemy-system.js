@@ -157,6 +157,7 @@ const EnemySystem = {
       tileY: spawnPosition.y,
       sprite,
       disguised: definition.specialAbilityId === ENEMY_SKILL_EMMA_DISGUISE,
+      paralysisTurns: 0,
       slowSkipNextTurn: KATJA_AIMED_SHOT_SKILL_IDS.includes(definition.specialAbilityId),
       status: !startsAwake
         && definition.specialAbilityId !== ENEMY_SKILL_EMMA_DISGUISE

@@ -364,7 +364,7 @@ class TitleScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#101820');
     this.createDungeonBackground();
     this.titleText = this.add.text(GAME_WIDTH / 2, 190, 'ルミア島の地下迷宮', {
-      fontFamily: 'Yusei Magic, sans-serif',
+      fontFamily: '"Yusei Magic", sans-serif',
       fontSize: '56px',
       color: '#f3f1e8',
       stroke: '#05080c',
@@ -502,13 +502,13 @@ class TitleScene extends Phaser.Scene {
       }
       if (this.recipeBook.container.visible) {
         if (this.recipeBook.handleInput(event.code)) {
-          this.sound.play(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.sound.play(event.code === 'KeyZ' ? 'se-cursor-enter' : ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyC'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
       if (this.enemyBook.container.visible) {
         if (this.enemyBook.handleInput(event.code)) {
-          this.sound.play(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
+          this.sound.play(event.code === 'KeyZ' ? 'se-cursor-enter' : ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.code) ? 'se-cursor-move' : 'se-cursor-cancel');
         }
         return;
       }
