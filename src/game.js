@@ -4524,9 +4524,9 @@ class DungeonTestScene extends Phaser.Scene {
     }
     const ranges = {
       [ENEMY_SKILL_LENOX_FISHING]: 3,
-      [ENEMY_SKILL_GOLD_LENOX_FISHING]: 5,
-      [ENEMY_SKILL_MITHRIL_LENOX_FISHING]: 7,
-      [ENEMY_SKILL_ETA_LENOX_FISHING]: Infinity,
+      [ENEMY_SKILL_GOLD_LENOX_FISHING]: 4,
+      [ENEMY_SKILL_MITHRIL_LENOX_FISHING]: 5,
+      [ENEMY_SKILL_ETA_LENOX_FISHING]: 6,
     };
     const offsetX = this.heroTileX - enemy.tileX;
     const offsetY = this.heroTileY - enemy.tileY;
