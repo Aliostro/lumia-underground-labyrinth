@@ -6,6 +6,7 @@ const SUSPENDED_RUN_STORAGE_KEY = 'lumia-underground-labyrinth-suspended-run';
 const DUNGEON_CLEAR_DISPLAYS = [
   { file: 'dungeon-0001.dat', label: 'ルミア島の地下迷宮 踏破', imageKey: 'dungeon-clear-rul', imageFile: 'IconClearRUL.png' },
   { file: 'dungeon-0002.dat', label: 'ホテル裏の下り階段 踏破', imageKey: 'dungeon-clear-hd', imageFile: 'IconClearHD.png' },
+  { file: 'dungeon-0004.dat', label: '港倉庫の秘密通路 踏破', imageKey: 'dungeon-clear-hd-below', imageFile: 'IconClearMSH.png' },
   { file: 'dungeon-0003.dat', label: '地下迷宮のさらに先 踏破', imageKey: 'dungeon-clear-lb', imageFile: 'IconClearLB.png' },
 ];
 const PLAYER_SKINS = [
@@ -234,6 +235,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('dungeon-data-0001', `assets/data/dungeon-0001.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0003', `assets/data/dungeon-0003.dat?v=${Date.now()}`);
+    this.load.text('dungeon-data-0004', `assets/data/dungeon-0004.dat?v=${Date.now()}`);
     this.load.text('item-data', `assets/data/item.csv?v=${Date.now()}`);
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
@@ -399,6 +401,7 @@ class TitleScene extends Phaser.Scene {
       { key: 'dungeon-data-0001', file: 'dungeon-0001.dat' },
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
       { key: 'dungeon-data-0003', file: 'dungeon-0003.dat' },
+      { key: 'dungeon-data-0004', file: 'dungeon-0004.dat' },
     ].map((option) => ({
       ...option,
       data: GameData.parseDungeonData(this.cache.text.get(option.key)),
@@ -419,24 +422,27 @@ class TitleScene extends Phaser.Scene {
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions, 20);
     const isDungeon0003Unlocked = getClearedDungeonFiles().has('dungeon-0001.dat');
     const mainMenuItems = [
-      this.createTitleMenuItem(GAME_WIDTH / 2, 372, dungeonOptions[0].data.dungeonName, () => {
+      this.createTitleMenuItem(GAME_WIDTH / 2, 394, dungeonOptions[0].data.dungeonName, () => {
         startDungeon(dungeonOptions[0]);
-      }, dungeonOptions[0].data.dungeonDescription ?? ''),
-      this.createTitleMenuItem(GAME_WIDTH / 2, 464, dungeonOptions[1].data.dungeonName, () => {
+      }, dungeonOptions[0].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
+      this.createTitleMenuItem(GAME_WIDTH / 2, 470, dungeonOptions[1].data.dungeonName, () => {
         startDungeon(dungeonOptions[1]);
-      }, dungeonOptions[1].data.dungeonDescription ?? ''),
+      }, dungeonOptions[1].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
+      this.createTitleMenuItem(GAME_WIDTH / 2, 546, dungeonOptions[3].data.dungeonName, () => {
+        startDungeon(dungeonOptions[3]);
+      }, dungeonOptions[3].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
     ];
     if (isDungeon0003Unlocked) {
-      mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 556, dungeonOptions[2].data.dungeonName, () => {
+      mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 622, dungeonOptions[2].data.dungeonName, () => {
         startDungeon(dungeonOptions[2]);
-      }, dungeonOptions[2].data.dungeonDescription ?? ''));
+      }, dungeonOptions[2].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }));
     } else {
-      this.createTitleMenuItem(GAME_WIDTH / 2, 556, '???', () => {}, '', { disabled: true });
+      this.createTitleMenuItem(GAME_WIDTH / 2, 622, '???', () => {}, '', { height: 70, fontSize: 26, disabled: true });
     }
-    mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 648, 'オプション', () => this.openOptionsMenu()));
     const bookMenuItems = [
       this.createTitleMenuItem(1060, 420, 'レシピ図鑑', () => this.openRecipeBook(), '', { width: 280, height: 64, fontSize: 24 }),
       this.createTitleMenuItem(1060, 508, '実験体図鑑', () => this.openEnemyBook(), '', { width: 280, height: 64, fontSize: 24 }),
+      this.createTitleMenuItem(1060, 596, 'オプション', () => this.openOptionsMenu(), '', { width: 280, height: 64, fontSize: 24 }),
     ];
     const suspendedRun = getSuspendedRun();
     const suspendedDungeon = dungeonOptions.find((option) => option.key === suspendedRun?.dungeonDataKey);
@@ -463,13 +469,13 @@ class TitleScene extends Phaser.Scene {
     };
     const resumeMenuItems = [this.createTitleMenuItem(
       184,
-      476,
+      414,
       '中断データから開始',
       resume,
       '',
       { width: 320, height: 42, fontSize: 20, disabled: !canResume },
     )];
-    this.add.text(184, 514, canResume ? `${suspendedDungeon.data.dungeonName} B${suspendedRun.playerStatus.floor}F` : '', {
+    this.add.text(184, 452, canResume ? `${suspendedDungeon.data.dungeonName} B${suspendedRun.playerStatus.floor}F` : '', {
       fontFamily: 'Yusei Magic, sans-serif', fontSize: '18px', color: '#b7c6d3',
     }).setOrigin(0.5);
     this.titleMenuColumns = [resumeMenuItems, mainMenuItems, bookMenuItems];
@@ -653,28 +659,28 @@ class TitleScene extends Phaser.Scene {
     const x = 184;
     this.parallelCodeInputValue = '';
     this.parallelCodeInputFocused = false;
-    this.add.text(x, 548, 'パラレルプレイコード', {
+    this.add.text(x, 486, 'パラレルプレイコード', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '18px',
       color: '#f3f1e8',
     }).setOrigin(0.5);
-    this.parallelCodeInputBackground = this.add.rectangle(x, 590, 320, 42, 0x182831)
+    this.parallelCodeInputBackground = this.add.rectangle(x, 522, 320, 42, 0x182831)
       .setStrokeStyle(2, 0x6e8996)
       .setInteractive({ useHandCursor: true });
-    this.parallelCodeInputText = this.add.text(x - 148, 590, '例: 1A2B3C4D', {
+    this.parallelCodeInputText = this.add.text(x - 148, 522, '例: 1A2B3C4D', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
       color: '#9ab5c7',
     }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
-    this.parallelStartBackground = this.add.rectangle(x, 642, 320, 42, 0x384d58)
+    this.parallelStartBackground = this.add.rectangle(x, 574, 320, 42, 0x384d58)
       .setStrokeStyle(2, 0x6e8996)
       .setInteractive({ useHandCursor: true });
-    this.parallelStartText = this.add.text(x, 642, 'パラレルスタート', {
+    this.parallelStartText = this.add.text(x, 574, 'パラレルスタート', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
       color: '#f3f1e8',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    this.parallelCodeMessage = this.add.text(x, 676, '', {
+    this.parallelCodeMessage = this.add.text(x, 608, '', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '14px',
       color: '#df5b62',

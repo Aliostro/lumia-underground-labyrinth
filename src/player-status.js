@@ -20,6 +20,7 @@ class PlayerStatus {
     this.hasteExtraAction = false;
     this.slowTurns = 0;
     this.paralysisTurns = 0;
+    this.bindTurns = 0;
     this.slowSkipNextTurn = false;
     this.brandTurns = 0;
     this.brainwashed = false;
@@ -27,6 +28,7 @@ class PlayerStatus {
     this.trapAvoidance = false;
     this.confusionImmunity = false;
     this.equipmentMaxHitPointBonus = 0;
+    this.equipmentMaxHitPointPenalty = 0;
     this.equipmentEffectFailures = {};
     this.inventory = [];
     this.inventoryCapacity = 20;
@@ -43,6 +45,9 @@ class PlayerStatus {
           definition.useCountMaximum,
         );
       }
+      if (itemData?.frozen) {
+        item.frozen = true;
+      }
       this.inventory.push(item);
       addedQuantity += 1;
     }
@@ -58,6 +63,7 @@ class PlayerStatus {
     item.equipped = definition.category;
     item.equipmentAttack = definition.attack;
     item.equipmentDefense = definition.defense;
+    item.equipmentEffectId = definition.equipEffectId;
     item.equipmentMaxHitPointBonus = {
       [ITEM_EQUIP_EFFECT_MAX_HIT_POINTS]: 15,
       [ITEM_EQUIP_EFFECT_GREATER_MAX_HIT_POINTS]: 30,
@@ -103,6 +109,10 @@ class PlayerStatus {
     this.attack = this.baseAttack;
     this.defense = this.baseDefense;
     let equipmentMaxHitPointBonus = 0;
+    const baseMaxHitPoints = this.maxHitPoints
+      - this.equipmentMaxHitPointBonus
+      + (this.equipmentMaxHitPointPenalty ?? 0);
+    let hasLifeStealMaxHitPointPenalty = false;
     this.inventory.forEach((item) => {
       if (item.equipped == null) {
         return;
@@ -110,16 +120,29 @@ class PlayerStatus {
       this.attack += Number(item.equipmentAttack) || 0;
       this.defense += Number(item.equipmentDefense) || 0;
       equipmentMaxHitPointBonus += Number(item.equipmentMaxHitPointBonus) || 0;
+      hasLifeStealMaxHitPointPenalty ||= item.equipmentEffectId === ITEM_EQUIP_EFFECT_LIFE_STEAL;
     });
-    this.maxHitPoints += equipmentMaxHitPointBonus - this.equipmentMaxHitPointBonus;
     this.equipmentMaxHitPointBonus = equipmentMaxHitPointBonus;
+    this.equipmentMaxHitPointPenalty = hasLifeStealMaxHitPointPenalty
+      ? Math.floor((baseMaxHitPoints + equipmentMaxHitPointBonus) * 0.15)
+      : 0;
+    this.maxHitPoints = baseMaxHitPoints
+      + equipmentMaxHitPointBonus
+      - this.equipmentMaxHitPointPenalty;
     this.hitPoints = Math.min(this.hitPoints, this.maxHitPoints);
   }
 
   getLevelExperienceRequirement(level) {
     let requirement = 10;
     for (let currentLevel = 1; currentLevel < level; currentLevel += 1) {
-      requirement = Math.ceil(requirement * 1.5);
+      const multiplier = currentLevel >= 40
+        ? 1
+        : currentLevel >= 30
+          ? 1.05
+          : currentLevel >= 20
+            ? 1.2
+            : 1.5;
+      requirement = Math.ceil(requirement * multiplier);
     }
     return requirement;
   }

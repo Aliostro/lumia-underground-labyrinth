@@ -1,4 +1,87 @@
 const EnemyAbilities = {
+  freezeWaterUnderElena(enemy) {
+    if (
+      !ELENA_FREEZE_SKILL_IDS.includes(enemy.specialAbilityId)
+      || this.dungeonTiles[enemy.tileY]?.[enemy.tileX] !== WATER_TILE
+    ) {
+      return false;
+    }
+    this.dungeonTiles[enemy.tileY][enemy.tileX] = ICE_TILE;
+    const tile = { x: enemy.tileX, y: enemy.tileY };
+    this.dungeonRenderer.refreshTiles([tile]);
+    this.minimapUi?.refreshTiles([tile]);
+    return true;
+  },
+
+  useElenaFreezeItems(enemy, attacks) {
+    const frozenItemCount = {
+      [ENEMY_SKILL_GOLD_ELENA_FREEZE]: 1,
+      [ENEMY_SKILL_MITHRIL_ELENA_FREEZE]: 2,
+      [ENEMY_SKILL_ETA_ELENA_FREEZE]: 3,
+    }[enemy.specialAbilityId] ?? 0;
+    if (
+      frozenItemCount === 0
+      || !this.isEnemyAdjacent(enemy)
+      || Math.random() >= 0.25
+    ) {
+      return false;
+    }
+    const candidates = this.playerStatus.inventory.filter((item) => (
+      item.equipped == null && !item.frozen
+    ));
+    const frozenItems = Phaser.Utils.Array.Shuffle(candidates).slice(0, frozenItemCount);
+    if (frozenItems.length === 0) {
+      return false;
+    }
+    frozenItems.forEach((item) => {
+      item.frozen = true;
+    });
+    attacks.push({
+      sprite: enemy.sprite,
+      targetsHero: true,
+      onStartAsync: true,
+      onStart: (complete) => {
+        this.playSfx('se-kabehori');
+        this.playElenaFreezeEffect(complete);
+      },
+    });
+    this.actionLog.add('ENEMY_ELENA_FREEZES', { enemy: this.getEnemyLogName(enemy) });
+    frozenItems.forEach((item) => {
+      this.actionLog.add('ITEM_FROZEN', {
+        item: this.itemDefinitions.get(item.id)?.name ?? 'アイテム',
+      });
+    });
+    this.refreshInventoryUi();
+    return true;
+  },
+
+  playElenaFreezeEffect(onComplete) {
+    const effect = this.add.graphics().setDepth(this.hero.depth + 3);
+    effect.fillStyle(0xc8f4ff, 0.9);
+    effect.lineStyle(2, 0xffffff, 0.95);
+    Array.from({ length: 8 }, (_, index) => {
+      const angle = Phaser.Math.DegToRad(index * 45);
+      const distance = 28 + (index % 2) * 14;
+      const x = Math.cos(angle) * distance;
+      const y = Math.sin(angle) * distance;
+      effect.fillTriangle(x, y - 12, x - 7, y + 8, x + 7, y + 8);
+      effect.strokeTriangle(x, y - 12, x - 7, y + 8, x + 7, y + 8);
+    });
+    effect.setPosition(this.hero.x, this.hero.y - TILE_SIZE / 2);
+    this.tweens.add({
+      targets: effect,
+      scaleX: 1.35,
+      scaleY: 1.35,
+      alpha: 0,
+      duration: 360,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        effect.destroy();
+        onComplete();
+      },
+    });
+  },
+
   useYuminWakeAll(enemy) {
     if (enemy.specialAbilityId !== ENEMY_SKILL_YUMIN_WAKE_ALL) {
       return false;

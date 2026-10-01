@@ -126,10 +126,11 @@ const InventoryUiBehavior = {
       const definition = item && this.itemDefinitions.get(item.id);
       const craftingUnavailable = this.pendingCraftItem && definition?.category === 80;
       const disabled = craftingMaterial || craftingUnavailable;
+      const frozen = Boolean(item?.frozen);
       const selected = index === this.selectedInventoryIndex;
-      this.inventorySlotGraphics.fillStyle(disabled ? 0x253039 : selected ? 0x384d58 : 0x1c2932, 1);
+      this.inventorySlotGraphics.fillStyle(disabled ? 0x253039 : frozen ? 0x2c86ad : selected ? 0x384d58 : 0x1c2932, 1);
       this.inventorySlotGraphics.fillRect(x, y, slotWidth, slotHeight - 4);
-      this.inventorySlotGraphics.lineStyle(selected ? 3 : 1, selected ? 0xffdc4a : disabled ? 0x52606a : 0x607785, 1);
+      this.inventorySlotGraphics.lineStyle(selected ? 3 : 1, selected ? 0xffdc4a : frozen ? 0xa8ecff : disabled ? 0x52606a : 0x607785, 1);
       this.inventorySlotGraphics.strokeRect(x, y, slotWidth, slotHeight - 4);
       const icon = this.inventoryItemIcons[row];
       icon.setPosition(x + 24, y + 17).setVisible(Boolean(definition));
@@ -151,8 +152,8 @@ const InventoryUiBehavior = {
         ? '（登録済）'
         : '';
       const itemName = item?.equipped != null
-        ? `[装備中] ${recipeName}${registeredRecipeLabel}${useCount}`
-        : `${recipeName}${registeredRecipeLabel}${useCount}`;
+        ? `[装備中] ${recipeName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`
+        : `${recipeName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`;
       const disabledLabel = craftingMaterial ? '[選択済み]' : craftingUnavailable ? '[製作不可]' : '';
       const recipePrefixWidth = recipeResultDefinition ? text.setText(recipeNamePrefix).width : 0;
       text.setPosition(x + 48, y + 7).setText(disabled ? `${itemName} ${disabledLabel}` : itemName);
@@ -267,6 +268,9 @@ const InventoryUiBehavior = {
   },
 
   getItemActions(item, definition, fromFloor) {
+    if (item.frozen) {
+      return fromFloor ? ['拾う', '投げる'] : ['置く', '投げる'];
+    }
     if (fromFloor) {
       if ([40, 70].includes(definition.category)) {
         return ['拾う', '食べる', '投げる', '製作'];

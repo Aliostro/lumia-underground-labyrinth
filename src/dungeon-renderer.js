@@ -5,10 +5,27 @@ class DungeonRenderer {
     this.floorTile = options.floorTile;
     this.corridorTile = options.corridorTile;
     this.waterTile = options.waterTile;
+    this.iceTile = options.iceTile;
     this.waterKey = options.waterKey;
     this.waterSprite = this.scene.make.image({ key: this.waterKey, add: false })
       .setOrigin(0)
       .setDisplaySize(this.tileSize, this.tileSize);
+    this.iceSurface = this.scene.make.graphics({ add: false });
+    this.iceSurface.fillStyle(0xd9f7ff, 0.62);
+    this.iceSurface.fillRect(0, 0, this.tileSize, this.tileSize);
+    this.iceSurface.fillStyle(0xffffff, 0.3);
+    this.iceSurface.fillCircle(20, 20, 18);
+    this.iceSurface.fillCircle(47, 43, 22);
+    this.iceSurface.lineStyle(1, 0xffffff, 0.92);
+    this.iceSurface.lineBetween(3, 15, 17, 20);
+    this.iceSurface.lineBetween(17, 20, 25, 14);
+    this.iceSurface.lineBetween(25, 14, 34, 19);
+    this.iceSurface.lineBetween(61, 47, 47, 43);
+    this.iceSurface.lineBetween(47, 43, 39, 51);
+    this.iceSurface.lineBetween(39, 51, 27, 48);
+    this.iceSurface.lineStyle(2, 0xffffff, 0.72);
+    this.iceSurface.lineBetween(0, 4, 12, 1);
+    this.iceSurface.lineBetween(52, 63, 63, 55);
     this.decorationChance = options.decorationChance;
     this.chunkSize = options.chunkSize;
     this.marginX = options.marginX;
@@ -53,9 +70,16 @@ class DungeonRenderer {
         const tileY = startY + y;
         const tileX = startX + x;
         const tile = this.tiles[tileY]?.[tileX];
-        if (tile === this.waterTile) {
-          this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
-          texture.draw(this.waterSprite);
+        if (tile === this.waterTile || tile === this.iceTile) {
+          if (tile === this.iceTile) {
+            this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
+            texture.draw(this.waterSprite);
+            this.iceSurface.setPosition(x * this.tileSize, y * this.tileSize);
+            texture.draw(this.iceSurface);
+          } else {
+            this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
+            texture.draw(this.waterSprite);
+          }
         } else {
           const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
           texture.drawFrame(this.mapChipKey, frame, x * this.tileSize, y * this.tileSize);
@@ -96,7 +120,8 @@ class DungeonRenderer {
       return Math.random() < this.decorationChance ? 3 : 2;
     }
     const tileBelow = tiles[y + 1]?.[x];
-    return tileBelow === this.floorTile || tileBelow === this.corridorTile || tileBelow === this.waterTile ? 1 : 0;
+    return tileBelow === this.floorTile || tileBelow === this.corridorTile
+      || tileBelow === this.waterTile || tileBelow === this.iceTile ? 1 : 0;
   }
 
 }

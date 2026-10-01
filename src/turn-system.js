@@ -152,12 +152,14 @@ const TurnSystem = {
           attack.targetX - projectileStart.x,
           attack.targetY - projectileStart.y,
         ) / TILE_SIZE * 60 / (attack.projectileSpeedMultiplier ?? 1);
-        const projectile = this.add.circle(
-          projectileStart.x,
-          projectileStart.y,
-          8,
-          0xffdc4a,
-        ).setDepth(attack.sprite.visible ? attack.sprite.depth + 1 : FOG_DEPTH + 1);
+        const projectile = attack.projectileStyle === 'spear'
+          ? this.createSpearProjectile(projectileStart, attack.targetX, attack.targetY)
+          : this.add.circle(
+            projectileStart.x,
+            projectileStart.y,
+            8,
+            0xffdc4a,
+          ).setDepth(attack.sprite.visible ? attack.sprite.depth + 1 : FOG_DEPTH + 1);
         this.tweens.add({
           targets: projectile,
           x: attack.targetX,

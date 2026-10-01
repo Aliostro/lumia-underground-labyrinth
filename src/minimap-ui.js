@@ -32,10 +32,10 @@ class MinimapUi {
   }
 
   redrawTerrain() {
-    const { floorTile, corridorTile, scale, x: originX, y: originY } = this.options;
+    const { floorTile, corridorTile, iceTile, scale, x: originX, y: originY } = this.options;
     this.graphics.clear();
     const drawTile = (x, y, tile) => {
-      if (tile === floorTile || tile === corridorTile) {
+      if (tile === floorTile || tile === corridorTile || tile === iceTile) {
         this.graphics.fillStyle(0x76d7ea, 0.9);
         this.graphics.fillRect(originX + x * scale, originY + y * scale, scale, scale);
       }

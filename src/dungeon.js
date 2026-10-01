@@ -88,7 +88,7 @@ class DungeonGenerator {
       this.carveRingCorridor(tiles, rooms[fromIndex], rooms[toIndex]);
     }
 
-    this.placeWater(tiles, rooms, waterChance);
+    this.placeWater(tiles, rooms, waterChance, true);
     this.placePonds(tiles, minimumPonds, maximumPonds);
     return { tiles, rooms };
   }
@@ -205,11 +205,8 @@ class DungeonGenerator {
     return pondTiles;
   }
 
-  placeWater(tiles, rooms, waterChance) {
-    for (const room of rooms) {
-      if (this.random() * 100 >= waterChance) {
-        continue;
-      }
+  placeWater(tiles, rooms, waterChance, guaranteeWater = false) {
+    const placeWaterInRoom = (room) => {
       const candidates = [];
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
@@ -220,7 +217,7 @@ class DungeonGenerator {
       }
       const start = candidates.length > 0 ? candidates[this.randomInt(0, candidates.length - 1)] : null;
       if (!start) {
-        continue;
+        return false;
       }
       const waterTiles = [start];
       const targetCount = this.randomInt(3, 5);
@@ -234,14 +231,32 @@ class DungeonGenerator {
         waterTiles.push(...neighbors.slice(0, targetCount - waterTiles.length));
       }
       if (waterTiles.length < 3) {
-        continue;
+        return false;
       }
       if (!this.keepsRoomAccessible(tiles, room, waterTiles)) {
-        continue;
+        return false;
       }
       waterTiles.forEach((tile) => {
         tiles[tile.y][tile.x] = 3;
       });
+      return true;
+    };
+
+    let waterPlaced = false;
+    for (const room of rooms) {
+      if (this.random() * 100 < waterChance) {
+        waterPlaced = placeWaterInRoom(room) || waterPlaced;
+      }
+    }
+    if (!guaranteeWater || waterChance <= 0 || waterPlaced) {
+      return;
+    }
+    const fallbackRooms = [...rooms];
+    this.shuffle(fallbackRooms);
+    for (const room of fallbackRooms) {
+      if (placeWaterInRoom(room)) {
+        return;
+      }
     }
   }
 
