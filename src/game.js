@@ -2290,7 +2290,7 @@ class DungeonTestScene extends Phaser.Scene {
     for (let distance = 1; distance <= 10; distance += 1) {
       const tileX = this.heroTileX + direction.x * distance;
       const tileY = this.heroTileY + direction.y * distance;
-      if (this.dungeonTiles[tileY]?.[tileX] === 0) {
+      if (this.dungeonTiles[tileY]?.[tileX] === 0 && !this.isOuterWallTile(tileX, tileY)) {
         this.dungeonTiles[tileY][tileX] = CORRIDOR_TILE;
         destroyedWalls.push({ x: tileX, y: tileY });
       }
@@ -3620,6 +3620,7 @@ class DungeonTestScene extends Phaser.Scene {
 
     if (
       destination === 0
+      && !this.isOuterWallTile(nextX, nextY)
       && !isDashing
       && (offsetX === 0 || offsetY === 0)
       && (this.hasEquipEffect(ITEM_EQUIP_EFFECT_DIG_WALL) || this.hasEquipEffect(ITEM_EQUIP_EFFECT_GOLDEN_DIG_WALL))
@@ -5955,7 +5956,7 @@ class DungeonTestScene extends Phaser.Scene {
         const destroyedWalls = [];
         for (let y = this.heroTileY - 1; y <= this.heroTileY + 1; y += 1) {
           for (let x = this.heroTileX - 1; x <= this.heroTileX + 1; x += 1) {
-            if (this.dungeonTiles[y]?.[x] === 0) {
+            if (this.dungeonTiles[y]?.[x] === 0 && !this.isOuterWallTile(x, y)) {
               this.dungeonTiles[y][x] = CORRIDOR_TILE;
               destroyedWalls.push({ x, y });
             }
@@ -7561,6 +7562,13 @@ class DungeonTestScene extends Phaser.Scene {
 
   getEnemyAt(tileX, tileY) {
     return this.enemies.find((enemy) => enemy.tileX === tileX && enemy.tileY === tileY);
+  }
+
+  isOuterWallTile(tileX, tileY) {
+    return tileX <= 0
+      || tileY <= 0
+      || tileX >= this.dungeonTiles[0].length - 1
+      || tileY >= this.dungeonTiles.length - 1;
   }
 
   isWalkableTile(tile) {

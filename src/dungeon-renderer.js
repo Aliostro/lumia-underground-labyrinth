@@ -70,7 +70,9 @@ class DungeonRenderer {
         const tileY = startY + y;
         const tileX = startX + x;
         const tile = this.tiles[tileY]?.[tileX];
-        if (tile === this.waterTile || tile === this.iceTile) {
+        if (this.isOuterWallTile(tileX, tileY)) {
+          texture.drawFrame(this.mapChipKey, 0, x * this.tileSize, y * this.tileSize);
+        } else if (tile === this.waterTile || tile === this.iceTile) {
           if (tile === this.iceTile) {
             this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
             texture.draw(this.waterSprite);
@@ -87,6 +89,13 @@ class DungeonRenderer {
       }
     }
     this.mapChunks.set(key, texture);
+  }
+
+  isOuterWallTile(tileX, tileY) {
+    return tileX <= 0
+      || tileY <= 0
+      || tileX >= this.tiles[0].length - 1
+      || tileY >= this.tiles.length - 1;
   }
 
   refreshTiles(tiles) {

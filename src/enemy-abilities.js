@@ -445,7 +445,7 @@ const EnemyAbilities = {
     for (let distance = 1; distance <= range; distance += 1) {
       const tileX = enemy.tileX + direction.x * distance;
       const tileY = enemy.tileY + direction.y * distance;
-      if (this.dungeonTiles[tileY]?.[tileX] === 0) {
+      if (this.dungeonTiles[tileY]?.[tileX] === 0 && !this.isOuterWallTile(tileX, tileY)) {
         this.dungeonTiles[tileY][tileX] = CORRIDOR_TILE;
         destroyedWalls.push({ x: tileX, y: tileY });
       }
