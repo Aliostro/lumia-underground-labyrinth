@@ -129,14 +129,22 @@ class EnemyBook {
       groupsByRootId.get(rootId).push(definition);
     });
     return [...groupsByRootId.entries()]
-      .map(([rootId, definitions]) => ({
-        name: `${definitionsById.get(rootId)?.name ?? definitions[0].name}種`,
-        definitions: definitions.sort((left, right) => left.id - right.id),
-        enemies: definitions.filter((definition) => registeredIds.has(definition.id)),
-      }))
-      .filter((group) => group.enemies.length > 0)
+      .map(([rootId, definitions]) => {
+        const sortedDefinitions = definitions.sort((left, right) => left.id - right.id);
+        const enemies = sortedDefinitions.map((definition) => ({
+          ...definition,
+          discovered: registeredIds.has(definition.id),
+        }));
+        const discoveredCount = enemies.filter((enemy) => enemy.discovered).length;
+        return {
+          name: discoveredCount > 0 ? `${definitionsById.get(rootId)?.name ?? definitions[0].name}種` : '???種',
+          sortName: definitionsById.get(rootId)?.name ?? definitions[0].name,
+          definitions: sortedDefinitions,
+          enemies,
+        };
+      })
       .sort((left, right) => (
-        left.name.localeCompare(right.name, 'ja')
+        left.sortName.localeCompare(right.sortName, 'ja')
         || left.definitions[0].id - right.definitions[0].id
       ));
   }
@@ -221,7 +229,9 @@ class EnemyBook {
     if (this.selectedEnemyIndex >= (selectedGroup?.enemies.length ?? 0)) {
       this.selectedEnemyIndex = 0;
     }
-    const discoveredEnemies = groups.reduce((count, group) => count + group.enemies.length, 0);
+    const discoveredEnemies = groups.reduce((count, group) => (
+      count + group.enemies.filter((enemy) => enemy.discovered).length
+    ), 0);
     this.countText.setText(`${discoveredEnemies} / ${this.enemyDefinitions.length}`);
     this.groupTitle.setColor(this.focusedColumn === 'groups' ? '#ffdc4a' : '#9ab5c7');
     this.enemyTitle.setColor(this.focusedColumn === 'enemies' ? '#ffdc4a' : '#9ab5c7');
@@ -236,7 +246,8 @@ class EnemyBook {
       const y = panelY + 86 + row * 38;
       const selected = index === this.selectedGroupIndex;
       this.drawRow(this.groupGraphics, panelX + 24, y, 255, selected, this.focusedColumn === 'groups');
-      text.setPosition(panelX + 34, y + 7).setText(group ? `${group.name}  ${group.enemies.length}/${group.definitions.length}` : '');
+      const discoveredCount = group?.enemies.filter((enemy) => enemy.discovered).length ?? 0;
+      text.setPosition(panelX + 34, y + 7).setText(group ? `${group.name}  ${discoveredCount}/${group.definitions.length}` : '');
       text.setColor(selected && group ? '#ffdc4a' : '#f3f1e8');
     });
     this.enemyGraphics.clear();
@@ -245,7 +256,7 @@ class EnemyBook {
       const y = panelY + 86 + row * 38;
       const selected = row === this.selectedEnemyIndex;
       this.drawRow(this.enemyGraphics, panelX + 300, y, 305, selected, this.focusedColumn === 'enemies');
-      text.setPosition(panelX + 310, y + 6).setText(enemy?.name ?? '');
+      text.setPosition(panelX + 310, y + 6).setText(enemy ? (enemy.discovered ? enemy.name : '???') : '');
       text.setColor(selected && enemy ? '#ffdc4a' : '#f3f1e8');
     });
     this.detailGraphics.clear();
@@ -254,11 +265,11 @@ class EnemyBook {
     this.detailGraphics.lineBetween(panelX + 620, panelY + 50, panelX + 620, panelY + 570);
     this.detailGraphics.lineBetween(panelX + 640, panelY + 365, panelX + 1170, panelY + 365);
     const enemy = selectedGroup?.enemies[this.selectedEnemyIndex];
-    this.enemyImage.setVisible(Boolean(enemy));
-    this.symbolImage.setVisible(Boolean(enemy?.symbolFile));
-    this.detailName.setText(enemy?.name ?? '撃破済みの実験体はありません');
-    this.statusText.setText(enemy ? this.getStatusText(enemy) : '実験体を倒すと、ここに記録されます。');
-    if (enemy) {
+    this.enemyImage.setVisible(Boolean(enemy?.discovered));
+    this.symbolImage.setVisible(Boolean(enemy?.discovered && enemy.symbolFile));
+    this.detailName.setText(enemy ? (enemy.discovered ? enemy.name : '???') : '実験体を倒すと、ここに記録されます。');
+    this.statusText.setText(enemy ? (enemy.discovered ? this.getStatusText(enemy) : '???') : '');
+    if (enemy?.discovered) {
       this.enemyImage.setTexture(enemy.imageFile);
       if (enemy.symbolFile) {
         this.symbolImage.setTexture(enemy.symbolFile);

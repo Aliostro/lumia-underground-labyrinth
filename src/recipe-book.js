@@ -100,7 +100,8 @@ class RecipeBook {
   get recipeGroups() {
     const registeredIds = RecipeBook.getRegisteredIds();
     const recipes = [...this.itemDefinitions.values()]
-      .filter((definition) => definition.category === 80 && registeredIds.has(definition.id))
+      .filter((definition) => definition.category === 80)
+      .map((definition) => ({ ...definition, discovered: registeredIds.has(definition.id) }))
       .sort((first, second) => first.id - second.id);
     const groupsByCategory = new Map();
     recipes.forEach((recipe) => {
@@ -216,7 +217,9 @@ class RecipeBook {
     if (this.selectedRecipeIndex >= selectedRecipes.length) {
       this.selectedRecipeIndex = 0;
     }
-    const registeredRecipeCount = groups.reduce((count, group) => count + group.recipes.length, 0);
+    const registeredRecipeCount = groups.reduce((count, group) => (
+      count + group.recipes.filter((recipe) => recipe.discovered).length
+    ), 0);
     this.countText.setText(`${registeredRecipeCount} / ${totalRecipeCount}`);
     this.groupTitle.setColor(this.focusedColumn === 'groups' ? '#ffdc4a' : '#9ab5c7');
     this.recipeTitle.setColor(this.focusedColumn === 'recipes' ? '#ffdc4a' : '#9ab5c7');
@@ -227,7 +230,8 @@ class RecipeBook {
       const y = panelY + 92 + row * 38;
       const selected = Boolean(group) && group === selectedGroup;
       this.drawRow(this.groupGraphics, panelX + 24, y, 250, selected, this.focusedColumn === 'groups');
-      text.setPosition(panelX + 34, y + 7).setText(group ? `${group.name}  ${group.recipes.length}` : '');
+      const discoveredCount = group?.recipes.filter((recipe) => recipe.discovered).length ?? 0;
+      text.setPosition(panelX + 34, y + 7).setText(group ? `${group.name}  ${discoveredCount}/${group.recipes.length}` : '');
       text.setColor(selected && group ? '#ffdc4a' : '#f3f1e8');
     });
     this.recipeGraphics.clear();
@@ -243,11 +247,11 @@ class RecipeBook {
       const y = panelY + 92 + row * 38;
       const selected = Boolean(recipe) && recipeIndex === this.selectedRecipeIndex;
       this.drawRow(this.recipeGraphics, panelX + 290, y, 686, selected, this.focusedColumn === 'recipes');
-      const result = recipe && this.getResultDefinition(recipe);
+      const result = recipe?.discovered && this.getResultDefinition(recipe);
       this.recipeIcons[row].setVisible(Boolean(result));
-      const recipeNamePrefix = recipe ? recipe.name.slice(0, -'のレシピ'.length) : '';
+      const recipeNamePrefix = recipe ? (recipe.discovered ? recipe.name.slice(0, -'のレシピ'.length) : '???') : '';
       const recipeLabelPrefix = recipeNamePrefix;
-      const recipeLabel = recipe ? `${recipeLabelPrefix}　　のレシピ` : '';
+      const recipeLabel = recipe ? (recipe.discovered ? `${recipeLabelPrefix}　　のレシピ` : '???') : '';
       const recipePrefixWidth = recipe ? text.setText(recipeLabelPrefix).width : 0;
       if (result) {
         this.recipeIcons[row]
@@ -262,8 +266,10 @@ class RecipeBook {
     this.separatorGraphics.lineBetween(panelX + 282, panelY + 50, panelX + 282, panelY + 488);
     this.separatorGraphics.lineBetween(panelX + 24, panelY + 488, panelX + 976, panelY + 488);
     const selectedRecipe = selectedRecipes[this.selectedRecipeIndex];
-    const result = selectedRecipe && this.getResultDefinition(selectedRecipe);
-    const description = selectedRecipe?.description ?? '登録済みのレシピはありません。';
+    const result = selectedRecipe?.discovered && this.getResultDefinition(selectedRecipe);
+    const description = selectedRecipe
+      ? (selectedRecipe.discovered ? selectedRecipe.description : '???')
+      : '登録済みのレシピはありません。';
     this.descriptionText.setText(result ? `${description}\n“${result.description}”` : description);
   }
 
