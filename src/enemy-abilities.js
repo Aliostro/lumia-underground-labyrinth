@@ -26,16 +26,19 @@ const EnemyAbilities = {
     ) {
       return false;
     }
+    const freezePrevented = this.hasEquipEffect(ITEM_EQUIP_EFFECT_ITEM_THEFT_AND_TRANSFORMATION_IMMUNITY);
     const candidates = this.playerStatus.inventory.filter((item) => (
       item.equipped == null && !item.frozen
     ));
     const frozenItems = Phaser.Utils.Array.Shuffle(candidates).slice(0, frozenItemCount);
-    if (frozenItems.length === 0) {
+    if (!freezePrevented && frozenItems.length === 0) {
       return false;
     }
-    frozenItems.forEach((item) => {
-      item.frozen = true;
-    });
+    if (!freezePrevented) {
+      frozenItems.forEach((item) => {
+        item.frozen = true;
+      });
+    }
     attacks.push({
       sprite: enemy.sprite,
       targetsHero: true,
@@ -46,12 +49,16 @@ const EnemyAbilities = {
       },
     });
     this.actionLog.add('ENEMY_ELENA_FREEZES', { enemy: this.getEnemyLogName(enemy) });
-    frozenItems.forEach((item) => {
-      this.actionLog.add('ITEM_FROZEN', {
-        item: this.itemDefinitions.get(item.id)?.name ?? 'アイテム',
+    if (freezePrevented) {
+      this.actionLog.add('ITEM_FREEZE_PREVENTED_BY_SWORD_STOPPER');
+    } else {
+      frozenItems.forEach((item) => {
+        this.actionLog.add('ITEM_FROZEN', {
+          item: this.itemDefinitions.get(item.id)?.name ?? 'アイテム',
+        });
       });
-    });
-    this.refreshInventoryUi();
+      this.refreshInventoryUi();
+    }
     return true;
   },
 

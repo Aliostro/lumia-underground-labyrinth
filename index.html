@@ -29,10 +29,80 @@
 			display: block;
 		}
 
+		#initial-loading {
+			position: fixed;
+			inset: 0;
+			z-index: 10;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 20px;
+			background:
+				repeating-linear-gradient(90deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 36px),
+				#101820;
+			color: #f3f1e8;
+			transition: opacity 240ms ease-out, visibility 240ms ease-out;
+		}
+
+		#initial-loading.is-hidden {
+			opacity: 0;
+			visibility: hidden;
+			pointer-events: none;
+		}
+
+		#initial-loading-title {
+			margin: 0;
+			font-size: clamp(28px, 6vw, 56px);
+			font-weight: 400;
+			letter-spacing: 0;
+			text-align: center;
+		}
+
+		#initial-loading-status {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin: 0;
+			font-size: 16px;
+			color: #9ab5c7;
+		}
+
+		#initial-loading-spinner {
+			width: 18px;
+			height: 18px;
+			border: 3px solid rgb(154 181 199 / 0.3);
+			border-top-color: #f0bb52;
+			border-radius: 50%;
+			animation: initial-loading-spin 850ms linear infinite;
+		}
+
+		@keyframes initial-loading-spin {
+			to { transform: rotate(360deg); }
+		}
+
 	</style>
 </head>
 <body>
+	<div id="initial-loading" role="status" aria-live="polite" aria-label="ゲームを読み込み中">
+		<h1 id="initial-loading-title">ルミア島の地下迷宮</h1>
+		<p id="initial-loading-status"><span id="initial-loading-spinner" aria-hidden="true"></span><span id="initial-loading-message">迷宮を準備中</span></p>
+	</div>
 	<main id="game-container" aria-label="ルミア島の地下迷宮"></main>
+	<script>
+		window.showInitialLoadingScreen = (message = '迷宮を準備中') => {
+			const loadingScreen = document.getElementById('initial-loading');
+			if (!loadingScreen) {
+				return;
+			}
+			document.getElementById('initial-loading-message').textContent = message;
+			loadingScreen.setAttribute('aria-label', message);
+			loadingScreen.classList.remove('is-hidden');
+		};
+		window.hideInitialLoadingScreen = () => {
+			document.getElementById('initial-loading')?.classList.add('is-hidden');
+		};
+	</script>
 
 	<script src="assets/lib/phaser.min.js"></script>
 	<script src="src/dungeon.js?v=9"></script>
@@ -46,12 +116,12 @@
 	<script src="src/game-constants.js?v=18"></script>
 	<script src="src/recipe-book.js?v=5"></script>
 	<script src="src/enemy-book.js?v=12"></script>
-	<script src="src/menu-scenes.js?v=27"></script>
+	<script src="src/menu-scenes.js?v=28"></script>
 	<script src="src/inventory-ui.js"></script>
 	<script src="src/enemy-system.js?v=5"></script>
 	<script src="src/enemy-abilities.js?v=3"></script>
 	<script src="src/lumi-system.js?v=1"></script>
 	<script src="src/turn-system.js?v=5"></script>
-	<script src="src/game.js?v=89"></script>
+	<script src="src/game.js?v=90"></script>
 </body>
 </html>

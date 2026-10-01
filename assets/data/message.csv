@@ -41,6 +41,7 @@
 "ENEMY_KARA_SPEAR","{enemy}はスピアを投げ、{damage}ダメージを与えた！"
 "ENEMY_ELENA_FREEZES","{enemy}「永久の冬を。」"
 "ITEM_FROZEN","{item}は凍結した！"
+"ITEM_FREEZE_PREVENTED_BY_SWORD_STOPPER","ソードストッパーによりアイテムの凍結を防いだ！"
 "ITEM_FROZEN_CANNOT_USE","{item}は凍結していて、そのコマンドは使えない。"
 "ITEM_PICKUP_FROZEN","{item}を拾った。"
 "ITEM_STEPPED_ON_FROZEN","{item}に乗った。"

@@ -107,6 +107,7 @@ function getUnlockedPlayerSkinIndexes() {
     !skin.unlockDungeonFile || clearedFiles.has(skin.unlockDungeonFile) ? [index] : []
   ));
 }
+      window.showInitialLoadingScreen?.('迷宮を生成中');
 
 function getSkinUnlockedByDungeonClear(dungeonFile) {
   return PLAYER_SKINS.find((skin) => skin.unlockDungeonFile === dungeonFile) ?? null;
@@ -458,6 +459,7 @@ class TitleScene extends Phaser.Scene {
       if (!run?.dungeonDataKey || !run?.dungeonDataFile || !run?.playerStatus) {
         return;
       }
+      window.showInitialLoadingScreen?.('中断した迷宮を復元中');
       this.scene.start('DungeonTestScene', {
         dungeonDataKey: run.dungeonDataKey,
         dungeonDataFile: run.dungeonDataFile,
@@ -561,6 +563,9 @@ class TitleScene extends Phaser.Scene {
     this.input.keyboard.on('keydown', this.onTitleKeyDown);
     this.events.once('shutdown', () => {
       this.input.keyboard.off('keydown', this.onTitleKeyDown);
+    });
+    window.requestAnimationFrame(() => {
+      window.hideInitialLoadingScreen?.();
     });
   }
 

@@ -577,6 +577,9 @@ class DungeonTestScene extends Phaser.Scene {
       this.input.keyboard.off('keydown', this.onGameKeyDown);
       document.fonts?.removeEventListener('loadingdone', this.gameFontLoadingHandler);
     });
+    window.requestAnimationFrame(() => {
+      window.hideInitialLoadingScreen?.();
+    });
   }
 
   refreshGameFonts() {
