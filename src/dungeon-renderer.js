@@ -10,6 +10,9 @@ class DungeonRenderer {
     this.waterSprite = this.scene.make.image({ key: this.waterKey, add: false })
       .setOrigin(0)
       .setDisplaySize(this.tileSize, this.tileSize);
+    this.tileEraser = this.scene.make.graphics({ add: false });
+    this.tileEraser.fillStyle(0xffffff, 1);
+    this.tileEraser.fillRect(0, 0, this.tileSize, this.tileSize);
     this.iceSurface = this.scene.make.graphics({ add: false });
     this.iceSurface.fillStyle(0xd9f7ff, 0.62);
     this.iceSurface.fillRect(0, 0, this.tileSize, this.tileSize);
@@ -67,28 +70,32 @@ class DungeonRenderer {
     ).setOrigin(0).setDepth(-1);
     for (let y = 0; y < this.chunkSize; y += 1) {
       for (let x = 0; x < this.chunkSize; x += 1) {
-        const tileY = startY + y;
-        const tileX = startX + x;
-        const tile = this.tiles[tileY]?.[tileX];
-        if (this.isOuterWallTile(tileX, tileY)) {
-          texture.drawFrame(this.mapChipKey, 0, x * this.tileSize, y * this.tileSize);
-        } else if (tile === this.waterTile || tile === this.iceTile) {
-          if (tile === this.iceTile) {
-            this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
-            texture.draw(this.waterSprite);
-            this.iceSurface.setPosition(x * this.tileSize, y * this.tileSize);
-            texture.draw(this.iceSurface);
-          } else {
-            this.waterSprite.setPosition(x * this.tileSize, y * this.tileSize);
-            texture.draw(this.waterSprite);
-          }
-        } else {
-          const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
-          texture.drawFrame(this.mapChipKey, frame, x * this.tileSize, y * this.tileSize);
-        }
+        this.drawMapTile(texture, startX + x, startY + y, x, y);
       }
     }
     this.mapChunks.set(key, texture);
+  }
+
+  drawMapTile(texture, tileX, tileY, chunkTileX, chunkTileY, clearExisting = false) {
+    const drawX = chunkTileX * this.tileSize;
+    const drawY = chunkTileY * this.tileSize;
+    if (clearExisting) {
+      texture.erase(this.tileEraser, drawX, drawY);
+    }
+    const tile = this.tiles[tileY]?.[tileX];
+    if (this.isOuterWallTile(tileX, tileY)) {
+      texture.drawFrame(this.mapChipKey, 0, drawX, drawY);
+    } else if (tile === this.waterTile || tile === this.iceTile) {
+      this.waterSprite.setPosition(drawX, drawY);
+      texture.draw(this.waterSprite);
+      if (tile === this.iceTile) {
+        this.iceSurface.setPosition(drawX, drawY);
+        texture.draw(this.iceSurface);
+      }
+    } else {
+      const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
+      texture.drawFrame(this.mapChipKey, frame, drawX, drawY);
+    }
   }
 
   isOuterWallTile(tileX, tileY) {
@@ -108,7 +115,6 @@ class DungeonRenderer {
         updatedTiles.add(`${x},${y}`);
       });
     });
-    const updatedChunks = new Set();
     updatedTiles.forEach((key) => {
       const [x, y] = key.split(',').map(Number);
       const tile = this.tiles[y][x];
@@ -116,11 +122,17 @@ class DungeonRenderer {
       const chunkX = Math.floor(x / this.chunkSize);
       const chunkY = Math.floor(y / this.chunkSize);
       this.mapFrames[y][x] = frame;
-      updatedChunks.add(`${chunkX},${chunkY}`);
-    });
-    updatedChunks.forEach((key) => {
-      const [chunkX, chunkY] = key.split(',').map(Number);
-      this.createMapChunk(chunkX, chunkY);
+      const texture = this.mapChunks.get(`${chunkX},${chunkY}`);
+      if (texture) {
+        this.drawMapTile(
+          texture,
+          x,
+          y,
+          x - chunkX * this.chunkSize,
+          y - chunkY * this.chunkSize,
+          true,
+        );
+      }
     });
   }
 

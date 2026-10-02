@@ -100,6 +100,9 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('Chara0051.png', 'assets/image/Chara0051.png');
     this.load.image('Chara0052.png', 'assets/image/Chara0052.png');
     this.load.image('Chara0053.png', 'assets/image/Chara0053.png');
+    this.load.image('Chara0054.png', 'assets/image/Chara0054.png');
+    this.load.image('Chara0055.png', 'assets/image/Chara0055.png');
+    this.load.image('Chara0056.png', 'assets/image/Chara0056.png');
     this.load.image('Chara9000.png', 'assets/image/Chara9000.png');
     this.load.image('Chara9001.png', 'assets/image/Chara9001.png');
     this.load.image('Chara9900.png', 'assets/image/Chara9900.png');
@@ -153,7 +156,7 @@ class DungeonTestScene extends Phaser.Scene {
         }
         const definition = this.itemDefinitions.get(item.id);
         item.equipmentAttack ??= definition?.attack ?? 0;
-        item.equipmentDefense ??= definition?.defense ?? 0;
+        item.equipmentDefense ??= (definition?.defense ?? 0) + (item.upgraded && definition?.category === 20 ? 3 : 0);
         item.equipmentEffectId ??= definition?.equipEffectId ?? null;
         item.equipmentMaxHitPointBonus ??= {
           [ITEM_EQUIP_EFFECT_MAX_HIT_POINTS]: 15,
@@ -806,7 +809,7 @@ class DungeonTestScene extends Phaser.Scene {
     const serializeEnemy = (enemy) => {
       const {
         sprite, symbolOutline, symbol, jackieLevelText, sleepText, confusionText, peaceText,
-        hasteText, slowText, paralysisText, sealText, idleTween, ...state
+        hasteText, slowText, paralysisText, sealText, tiaPaintMarker, idleTween, ...state
       } = enemy;
       return state;
     };
@@ -851,7 +854,7 @@ class DungeonTestScene extends Phaser.Scene {
         return;
       }
       const { sprite, symbolOutline, symbol, jackieLevelText, sleepText, confusionText, peaceText,
-        hasteText, slowText, paralysisText, sealText, idleTween, ...state } = savedEnemy;
+        hasteText, slowText, paralysisText, sealText, tiaPaintMarker, idleTween, ...state } = savedEnemy;
       Object.assign(enemy, state);
       const spriteX = (enemy.tileX + 0.5) * TILE_SIZE;
       const spriteY = (enemy.tileY + (enemy.disguised ? 0.5 : 1)) * TILE_SIZE;
@@ -1184,6 +1187,7 @@ class DungeonTestScene extends Phaser.Scene {
       const slowed = this.isEnemySlowed(enemy);
       const paralyzed = enemy.paralysisTurns > 0;
       const sealed = enemy.isSealed;
+      const tiaPainted = enemy.tiaPaintColor != null;
       const activeMarkers = [
         sleeping && 'sleep',
         peaceful && 'peace',
@@ -1192,6 +1196,7 @@ class DungeonTestScene extends Phaser.Scene {
         slowed && 'slow',
         paralyzed && 'paralysis',
         sealed && 'seal',
+        tiaPainted && 'tia-paint',
       ].filter(Boolean);
       const visibleMarker = activeMarkers[statusMarkerTick % activeMarkers.length];
       const showMarker = enemy.sprite.visible && !enemy.disguised;
@@ -1209,6 +1214,8 @@ class DungeonTestScene extends Phaser.Scene {
         .setVisible(showMarker && visibleMarker === 'paralysis');
       enemy.sealText?.setPosition(enemy.sprite.x + 34, enemy.sprite.y - 90)
         .setVisible(showMarker && visibleMarker === 'seal');
+      this.refreshTiaPaintMarker(enemy);
+      enemy.tiaPaintMarker?.setVisible(showMarker && visibleMarker === 'tia-paint');
     });
   }
 
@@ -1765,6 +1772,9 @@ class DungeonTestScene extends Phaser.Scene {
     if (floorItem.frozen) {
       exchangedItem.frozen = true;
     }
+    if (floorItem.upgraded) {
+      exchangedItem.upgraded = true;
+    }
     floorItem.marker.destroy();
     this.floorItems = this.floorItems.filter((item) => item !== floorItem);
     this.playerStatus.inventory.splice(inventoryIndex, 1, exchangedItem);
@@ -1788,6 +1798,13 @@ class DungeonTestScene extends Phaser.Scene {
     if (!firstItem || !secondItem || firstItem === secondItem || secondDefinition?.category === 80) {
       return;
     }
+    if (firstItem.frozen || secondItem.frozen) {
+      const frozenItem = firstItem.frozen ? firstItem : secondItem;
+      this.actionLog.add('ITEM_FROZEN_CANNOT_USE', {
+        item: this.getItemLogName(frozenItem),
+      });
+      return;
+    }
     if (!this.isInventoryOrFloorItem(firstItem) || !this.isInventoryOrFloorItem(secondItem)) {
       return;
     }
@@ -1795,10 +1812,18 @@ class DungeonTestScene extends Phaser.Scene {
     const materialIds = [firstItem.id, secondItem.id].sort((first, second) => first - second);
     const recipe = this.craftDefinitions.get(materialIds.join(','));
     const firstDefinition = this.itemDefinitions.get(firstItem.id);
+    const resultDefinition = recipe && this.itemDefinitions.get(recipe.resultItemId);
+    const inheritsArmorUpgrade = resultDefinition?.category === 20 && [firstItem, secondItem].some((item) => (
+      item.upgraded && this.itemDefinitions.get(item.id)?.category === 20
+    ));
     this.removeInventoryOrFloorItem(firstItem);
     this.removeInventoryOrFloorItem(secondItem);
-    if (recipe && this.playerStatus.addItem(recipe.resultItemId, 1, this.itemDefinitions)) {
-      const resultDefinition = this.itemDefinitions.get(recipe.resultItemId);
+    if (recipe && this.playerStatus.addItem(
+      recipe.resultItemId,
+      1,
+      this.itemDefinitions,
+      inheritsArmorUpgrade ? { upgraded: true } : null,
+    )) {
       this.playSfx('se-craft-ok');
       this.actionLog.add('ITEM_CRAFT_SUCCESS', {
         first: firstDefinition?.name ?? 'アイテム',
@@ -2363,6 +2388,7 @@ class DungeonTestScene extends Phaser.Scene {
       enemy.slowText.destroy();
       enemy.paralysisText.destroy();
       enemy.sealText?.destroy();
+      enemy.tiaPaintMarker?.destroy();
       this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
     });
   }
@@ -2548,6 +2574,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
     enemy.sealText?.destroy();
+    enemy.tiaPaintMarker?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -2576,6 +2603,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
     enemy.sealText?.destroy();
+    enemy.tiaPaintMarker?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -2730,6 +2758,16 @@ class DungeonTestScene extends Phaser.Scene {
 
   applyEnemyDefeatDrop(enemy) {
     EnemyBook.register(enemy.id);
+    if (enemy.specialAbilityId === ENEMY_SKILL_ALDA_DIG && Math.random() < 0.3) {
+      const definition = this.itemDefinitions.get(6);
+      const dropped = this.placeDroppedItem({ id: 6 }, enemy.tileX, enemy.tileY);
+      if (dropped) {
+        this.actionLog.add('ENEMY_DROP_ITEM', { enemy: this.getEnemyLogName(enemy), item: definition.name });
+      } else {
+        this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+      }
+      return;
+    }
     if (
       [
         ENEMY_SKILL_ADRIANA_FIRE_PILLAR,
@@ -3315,6 +3353,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
     enemy.sealText?.destroy();
+    enemy.tiaPaintMarker?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -3402,7 +3441,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   getItemLogName(item, definition = this.itemDefinitions.get(item.id)) {
-    return `${definition?.name ?? 'アイテム'}${item.frozen ? '《凍結》' : ''}`;
+    return `${item.upgraded && definition?.category === 20 ? '★' : ''}${definition?.name ?? 'アイテム'}${item.frozen ? '《凍結》' : ''}`;
   }
 
   isInventoryOrFloorItem(item) {
@@ -4163,6 +4202,7 @@ class DungeonTestScene extends Phaser.Scene {
         enemy.slowText.destroy();
         enemy.paralysisText.destroy();
         enemy.sealText?.destroy();
+        enemy.tiaPaintMarker?.destroy();
       };
       enemy.sealText?.destroy();
       enemy.sealText = null;
@@ -4299,6 +4339,8 @@ class DungeonTestScene extends Phaser.Scene {
     this.confusionEndedEnemies = new Set();
     this.peaceAppliedEnemies ||= new Set();
     this.alonsoPullUsedThisTurn = false;
+    this.pendingAldaDugTiles = [];
+    this.pendingAldaMinimapTiles = [];
     for (const enemy of [...this.enemies]) {
       if (!this.enemies.includes(enemy)) {
         continue;
@@ -4421,6 +4463,30 @@ class DungeonTestScene extends Phaser.Scene {
         continue;
       }
       if (this.useElenaFreezeItems(enemy, attacks)) {
+        continue;
+      }
+      if (this.useAldaDig(enemy)) {
+        continue;
+      }
+      const aldaAdvanceMovement = this.resolveAldaAdvanceMove(enemy);
+      if (aldaAdvanceMovement) {
+        movements.push(aldaAdvanceMovement);
+        continue;
+      }
+      if (this.useTiaPaint(enemy)) {
+        continue;
+      }
+      const tiaMovement = this.resolveTiaMovement(enemy);
+      if (tiaMovement) {
+        movements.push(tiaMovement);
+        continue;
+      }
+      if (this.useMaiUpgrade(enemy)) {
+        continue;
+      }
+      const maiMovement = this.resolveMaiMovement(enemy);
+      if (maiMovement) {
+        movements.push(maiMovement);
         continue;
       }
       if (this.useHeartPeace(enemy, attacks)) {
@@ -4578,6 +4644,12 @@ class DungeonTestScene extends Phaser.Scene {
         } else if (this.isEnemyAdjacent(enemy)) {
           attacks.push(...this.enemyAttack(enemy, remainingAttacks));
         }
+      }
+    }
+    if (this.pendingAldaDugTiles.length > 0) {
+      this.dungeonRenderer.refreshTiles(this.pendingAldaDugTiles);
+      if (this.pendingAldaMinimapTiles.length > 0) {
+        this.minimapUi.refreshTiles(this.pendingAldaMinimapTiles);
       }
     }
     this.enteredRoom = null;
@@ -5362,6 +5434,7 @@ class DungeonTestScene extends Phaser.Scene {
     enemy.slowText.destroy();
     enemy.paralysisText.destroy();
     enemy.sealText?.destroy();
+    enemy.tiaPaintMarker?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== enemy);
   }
 
@@ -5635,6 +5708,7 @@ class DungeonTestScene extends Phaser.Scene {
               enemy.slowText.destroy();
               enemy.paralysisText.destroy();
               enemy.sealText?.destroy();
+              enemy.tiaPaintMarker?.destroy();
             };
           } else {
             this.playSfx('se-miss');
@@ -6417,6 +6491,7 @@ class DungeonTestScene extends Phaser.Scene {
     target.slowText.destroy();
     target.paralysisText.destroy();
     target.sealText?.destroy();
+    target.tiaPaintMarker?.destroy();
     this.enemies = this.enemies.filter((otherEnemy) => otherEnemy !== target);
     if (this.isJackie(attacker)) {
       attacker.attack += 5;
@@ -6803,7 +6878,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   isEnemyHasted(enemy) {
-    return enemy.speedTurns > 0 || (
+    return enemy.tiaPaintColor === 'yellow' || enemy.speedTurns > 0 || (
       enemy.specialAbilityId === ENEMY_SKILL_STEAL_ITEM
       && enemy.heldItem != null
     );

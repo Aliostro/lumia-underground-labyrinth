@@ -130,6 +130,8 @@
 "ENEMY_SLOWED","{enemy}は鈍足になった！"
 "ENEMY_PARALYZED","{enemy}は麻痺した！"
 "ENEMY_PARALYSIS_ENDED","{enemy}の麻痺が解けた！"
+"ENEMY_TIA_PAINTS","{enemy}「{color}！」{target}に色を塗った！"
+"ENEMY_MAI_UPGRADES_ARMOR","{enemy}は落ちている防具をオートクチュールにした！"
 "CONFUSION_ENDED","{target}の混乱はおさまった！"
 "PLAYER_WOKE_UP","目を覚ました！"
 "ENEMY_WOKE_UP","{enemy}は目を覚ました！"

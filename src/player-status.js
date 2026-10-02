@@ -48,6 +48,9 @@ class PlayerStatus {
       if (itemData?.frozen) {
         item.frozen = true;
       }
+      if (itemData?.upgraded) {
+        item.upgraded = true;
+      }
       this.inventory.push(item);
       addedQuantity += 1;
     }
@@ -62,7 +65,7 @@ class PlayerStatus {
     });
     item.equipped = definition.category;
     item.equipmentAttack = definition.attack;
-    item.equipmentDefense = definition.defense;
+    item.equipmentDefense = definition.defense + (item.upgraded && definition.category === 20 ? 3 : 0);
     item.equipmentEffectId = definition.equipEffectId;
     item.equipmentMaxHitPointBonus = {
       [ITEM_EQUIP_EFFECT_MAX_HIT_POINTS]: 15,

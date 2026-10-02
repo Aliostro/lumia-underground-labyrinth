@@ -9,8 +9,202 @@ const EnemyAbilities = {
     this.dungeonTiles[enemy.tileY][enemy.tileX] = ICE_TILE;
     const tile = { x: enemy.tileX, y: enemy.tileY };
     this.dungeonRenderer.refreshTiles([tile]);
-    this.minimapUi?.refreshTiles([tile]);
+    const tileKey = `${tile.x},${tile.y}`;
+    if (this.empDroneActive || this.minimapUi?.discoveredTiles.has(tileKey)) {
+      this.minimapUi.refreshTiles([tile]);
+    }
     return true;
+  },
+
+  useAldaDig(enemy) {
+    if (
+      enemy.specialAbilityId !== ENEMY_SKILL_ALDA_DIG
+      || this.getEnemyVisibleTiles(enemy).has(`${this.heroTileX},${this.heroTileY}`)
+    ) {
+      return false;
+    }
+    const directions = [
+      { x: 0, y: -1 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+    ];
+    const canDig = ({ x, y }) => {
+      const tileX = enemy.tileX + x;
+      const tileY = enemy.tileY + y;
+      return this.dungeonTiles[tileY]?.[tileX] === 0
+        && !this.isOuterWallTile(tileX, tileY)
+        && !this.isTileOccupied(tileX, tileY);
+    };
+    let direction = enemy.aldaDigDirection;
+    if (
+      direction
+      && enemy.aldaDigsUntilTurn > 0
+      && this.isWalkableTile(this.dungeonTiles[enemy.tileY + direction.y]?.[enemy.tileX + direction.x])
+    ) {
+      return false;
+    }
+    if (!direction || enemy.aldaDigsUntilTurn <= 0 || !canDig(direction)) {
+      const turnDirections = direction
+        ? [
+          { x: -direction.y, y: direction.x },
+          { x: direction.y, y: -direction.x },
+        ].filter(canDig)
+        : [];
+      direction = Phaser.Utils.Array.GetRandom(turnDirections.length > 0
+        ? turnDirections
+        : directions.filter(canDig));
+      enemy.aldaDigsUntilTurn = 4 + Math.floor(this.getInitialRandom() * 3);
+    }
+    if (!direction) {
+      return false;
+    }
+    const tileX = enemy.tileX + direction.x;
+    const tileY = enemy.tileY + direction.y;
+    this.dungeonTiles[tileY][tileX] = CORRIDOR_TILE;
+    const tile = { x: tileX, y: tileY };
+    this.pendingAldaDugTiles.push(tile);
+    const tileKey = `${tileX},${tileY}`;
+    if (this.empDroneActive || this.minimapUi?.discoveredTiles.has(tileKey)) {
+      this.pendingAldaMinimapTiles.push(tile);
+    }
+    this.corridorTiles.push(tile);
+    enemy.aldaDigDirection = direction;
+    enemy.aldaDigsUntilTurn -= 1;
+    return true;
+  },
+
+  resolveAldaAdvanceMove(enemy) {
+    if (
+      enemy.specialAbilityId !== ENEMY_SKILL_ALDA_DIG
+      || !enemy.aldaDigDirection
+      || this.getEnemyVisibleTiles(enemy).has(`${this.heroTileX},${this.heroTileY}`)
+    ) {
+      return null;
+    }
+    const { x, y } = enemy.aldaDigDirection;
+    return this.isWalkableTile(this.dungeonTiles[enemy.tileY + y]?.[enemy.tileX + x])
+      ? this.resolveEnemyMoveInDirection(enemy, enemy.aldaDigDirection)
+      : null;
+  },
+
+  getTiaPaintTargets(enemy) {
+    const visibleTiles = this.getEnemyVisibleTiles(enemy);
+    return this.enemies.filter((target) => (
+      target !== enemy
+      && !target.tiaPaintColor
+      && visibleTiles.has(`${target.tileX},${target.tileY}`)
+    ));
+  },
+
+  useTiaPaint(enemy) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_TIA_PAINT) {
+      return false;
+    }
+    const adjacentTargets = this.getTiaPaintTargets(enemy).filter((target) => (
+      this.isEnemyAdjacentTo(enemy, target.tileX, target.tileY)
+    ));
+    const target = Phaser.Utils.Array.GetRandom(adjacentTargets);
+    if (!target) {
+      return false;
+    }
+    const color = this.getInitialRandomItem(['red', 'yellow', 'blue']);
+    target.tiaPaintColor = color;
+    if (color === 'red') {
+      target.attack += 5;
+    } else if (color === 'blue') {
+      target.defense += 5;
+    }
+    this.refreshTiaPaintMarker(target);
+    this.actionLog.add('ENEMY_TIA_PAINTS', {
+      enemy: this.getEnemyLogName(enemy),
+      target: this.getEnemyLogName(target),
+      color: { red: 'あかっ', yellow: 'きいろっ', blue: 'あおっ' }[color],
+    });
+    return true;
+  },
+
+  resolveTiaMovement(enemy) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_TIA_PAINT) {
+      return null;
+    }
+    const targets = this.getTiaPaintTargets(enemy).sort((first, second) => (
+      Math.max(Math.abs(first.tileX - enemy.tileX), Math.abs(first.tileY - enemy.tileY))
+      - Math.max(Math.abs(second.tileX - enemy.tileX), Math.abs(second.tileY - enemy.tileY))
+    ));
+    const target = targets[0];
+    if (!target) {
+      return null;
+    }
+    const step = this.findShortestPathStep(enemy, { x: target.tileX, y: target.tileY });
+    return step && this.resolveEnemyMoveInDirection(enemy, {
+      x: step.x - enemy.tileX,
+      y: step.y - enemy.tileY,
+    });
+  },
+
+  refreshTiaPaintMarker(enemy) {
+    if (!enemy.tiaPaintColor) {
+      enemy.tiaPaintMarker?.setVisible(false);
+      return;
+    }
+    const color = { red: 0xf04f4f, yellow: 0xf1ca3a, blue: 0x4c9dff }[enemy.tiaPaintColor];
+    if (!enemy.tiaPaintMarker) {
+      enemy.tiaPaintMarker = this.add.graphics()
+        .fillStyle(color, 1)
+        .fillCircle(0, 0, 10)
+        .lineStyle(2, 0x6b4327, 1)
+        .strokeCircle(0, 0, 10);
+    }
+    enemy.tiaPaintMarker
+      .setPosition(enemy.sprite.x + 34, enemy.sprite.y - 90)
+      .setDepth(enemy.sprite.depth + 1);
+  },
+
+  getMaiUpgradeTargets(enemy) {
+    const visibleTiles = this.getEnemyVisibleTiles(enemy);
+    return this.floorItems.filter((item) => {
+      const definition = this.itemDefinitions.get(item.id);
+      return definition?.category === 20
+        && !item.upgraded
+        && visibleTiles.has(`${item.tileX},${item.tileY}`);
+    });
+  },
+
+  useMaiUpgrade(enemy) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_MAI_UPGRADE) {
+      return false;
+    }
+    const item = this.getFloorItemAt(enemy.tileX, enemy.tileY);
+    const definition = item && this.itemDefinitions.get(item.id);
+    if (definition?.category !== 20 || item.upgraded) {
+      return false;
+    }
+    item.upgraded = true;
+    this.actionLog.add('ENEMY_MAI_UPGRADES_ARMOR', {
+      enemy: this.getEnemyLogName(enemy),
+    });
+    this.refreshInventoryUi();
+    return true;
+  },
+
+  resolveMaiMovement(enemy) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_MAI_UPGRADE) {
+      return null;
+    }
+    const targets = this.getMaiUpgradeTargets(enemy).sort((first, second) => (
+      Math.max(Math.abs(first.tileX - enemy.tileX), Math.abs(first.tileY - enemy.tileY))
+      - Math.max(Math.abs(second.tileX - enemy.tileX), Math.abs(second.tileY - enemy.tileY))
+    ));
+    const target = targets[0];
+    if (!target) {
+      return null;
+    }
+    const step = this.findShortestPathStep(enemy, { x: target.tileX, y: target.tileY });
+    return step && this.resolveEnemyMoveInDirection(enemy, {
+      x: step.x - enemy.tileX,
+      y: step.y - enemy.tileY,
+    });
   },
 
   useElenaFreezeItems(enemy, attacks) {

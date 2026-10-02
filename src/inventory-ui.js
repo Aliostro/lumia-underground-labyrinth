@@ -48,6 +48,11 @@ const InventoryUiBehavior = {
       wordWrap: { width: 660, useAdvancedWrap: true },
       lineSpacing: 6,
     });
+    this.inventoryUpgradeDescriptionText = this.add.text(panelX + 30, panelY + 482, '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '16px',
+      color: '#ffdc4a',
+    }).setVisible(false);
     this.inventoryCraftGraphics = this.add.graphics();
     this.inventoryCraftTitleText = this.add.text(panelX + 750, panelY + 30, '作れるもの', {
       fontFamily: 'Yusei Magic, sans-serif',
@@ -72,6 +77,7 @@ const InventoryUiBehavior = {
       ...this.inventoryRecipeResultIcons,
       ...this.inventoryItemTexts,
       this.inventoryDescriptionText,
+        this.inventoryUpgradeDescriptionText,
       this.inventoryCraftGraphics,
       this.inventoryCraftTitleText,
       ...this.inventoryCraftTexts,
@@ -124,9 +130,10 @@ const InventoryUiBehavior = {
       const item = this.inventoryPage === 2 ? (row === 0 ? floorItem : null) : this.playerStatus.inventory[index];
       const craftingMaterial = item && item === this.pendingCraftItem;
       const definition = item && this.itemDefinitions.get(item.id);
-      const craftingUnavailable = this.pendingCraftItem && definition?.category === 80;
-      const disabled = craftingMaterial || craftingUnavailable;
       const frozen = Boolean(item?.frozen);
+        const upgraded = Boolean(item?.upgraded && definition?.category === 20);
+      const craftingUnavailable = this.pendingCraftItem && (definition?.category === 80 || frozen);
+      const disabled = craftingMaterial || craftingUnavailable;
       const selected = index === this.selectedInventoryIndex;
       this.inventorySlotGraphics.fillStyle(disabled ? 0x253039 : frozen ? 0x2c86ad : selected ? 0x384d58 : 0x1c2932, 1);
       this.inventorySlotGraphics.fillRect(x, y, slotWidth, slotHeight - 4);
@@ -148,12 +155,13 @@ const InventoryUiBehavior = {
       const recipeName = recipeResultDefinition
         ? `${recipeNamePrefix}　　のレシピ`
         : definition?.name ?? '';
+      const itemDisplayName = upgraded ? `★${recipeName}` : recipeName;
       const registeredRecipeLabel = definition?.category === 80 && registeredRecipeIds.has(definition.id)
         ? '（登録済）'
         : '';
       const itemName = item?.equipped != null
-        ? `[装備中] ${recipeName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`
-        : `${recipeName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`;
+        ? `[装備中] ${itemDisplayName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`
+        : `${itemDisplayName}${registeredRecipeLabel}${useCount}${frozen ? '《凍結》' : ''}`;
       const disabledLabel = craftingMaterial ? '[選択済み]' : craftingUnavailable ? '[製作不可]' : '';
       const recipePrefixWidth = recipeResultDefinition ? text.setText(recipeNamePrefix).width : 0;
       text.setPosition(x + 48, y + 7).setText(disabled ? `${itemName} ${disabledLabel}` : itemName);
@@ -176,6 +184,11 @@ const InventoryUiBehavior = {
     this.inventoryDescriptionText.setText(selectedRecipeResult
       ? `${description}\n“${selectedRecipeResult.description}”`
       : description);
+    const selectedItemUpgraded = Boolean(selectedItem?.upgraded && selectedDefinition?.category === 20);
+    this.inventoryUpgradeDescriptionText
+      .setPosition(panelX + 30, panelY + 486 + this.inventoryDescriptionText.height)
+      .setText('アップグレード済。防御力+3')
+      .setVisible(selectedItemUpgraded);
     this.refreshCraftableItemList(selectedDefinition, registeredRecipeIds);
     this.refreshInventoryBorder();
   },
