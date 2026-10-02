@@ -127,6 +127,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.suspendedState = data?.suspendedState ?? null;
     this.isChangingFloor = false;
     this.isGameOver = false;
+    this.isHeroFallen = false;
     this.inputReady = false;
     this.isHeroMoving = false;
     this.isAttackAnimating = false;
@@ -243,6 +244,7 @@ class DungeonTestScene extends Phaser.Scene {
     );
     this.hero.setOrigin(0.5, 1);
     this.hero.setDisplaySize(HERO_DISPLAY_SIZE, HERO_DISPLAY_SIZE);
+    this.addGroundShadow(this.hero);
     this.heroSleepText = this.add.text(this.hero.x + 34, this.hero.y - 90, 'Zz', {
       fontFamily: 'Yusei Magic, sans-serif',
       fontSize: '20px',
@@ -293,6 +295,7 @@ class DungeonTestScene extends Phaser.Scene {
       strokeThickness: 3,
     }).setOrigin(0.5).setDepth(this.hero.depth + 1).setVisible(false);
     this.diagonalInputIndicators = this.add.graphics().setDepth(this.hero.depth + 2).setVisible(false);
+    this.createDiagonalInputGrid();
     this.updateHeroDepth(this.heroTileY);
     this.startIdleMotion();
     if (this.suspendedState) {
@@ -801,7 +804,7 @@ class DungeonTestScene extends Phaser.Scene {
       (position.x + 0.5) * TILE_SIZE,
       (position.y + 0.5) * TILE_SIZE,
       'stairs',
-    ).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(position.y + 0.25);
+    ).setDisplaySize(TILE_SIZE, TILE_SIZE).setDepth(0);
     this.stairs = { ...position, sprite };
   }
 
@@ -839,7 +842,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.stairs.sprite.setPosition(
         (this.stairs.x + 0.5) * TILE_SIZE,
         (this.stairs.y + 0.5) * TILE_SIZE,
-      ).setDepth(this.stairs.y + 0.25);
+      ).setDepth(0);
     }
     this.suspendedState.floorItems.forEach((item) => {
       this.placeFloorItem({ ...item }, item.tileX, item.tileY);
@@ -1013,6 +1016,23 @@ class DungeonTestScene extends Phaser.Scene {
     return [...exits.values()];
   }
 
+  addGroundShadow(sprite, width = 48, height = 16, offsetY = null) {
+    const shadow = this.add.ellipse(0, 0, width, height, 0x000000, 0.28).setDepth(0.1);
+    const updateShadow = () => {
+      const bottomOffset = offsetY ?? (sprite.displayHeight * (1 - sprite.originY) - 8);
+      shadow.setPosition(sprite.x, sprite.y + bottomOffset)
+        .setVisible(sprite.visible && !(sprite === this.hero && this.isHeroFallen))
+        .setAlpha(sprite.alpha);
+    };
+    updateShadow();
+    this.events.on('postupdate', updateShadow);
+    sprite.once('destroy', () => {
+      this.events.off('postupdate', updateShadow);
+      shadow.destroy();
+    });
+    return shadow;
+  }
+
   updateCharacterDepth(sprite, tileY) {
     sprite.setDepth(tileY + 1);
   }
@@ -1056,19 +1076,21 @@ class DungeonTestScene extends Phaser.Scene {
     this.visibilityMaskShape.fillStyle(0xffffff, 1);
     const danielLimitsVision = currentRoom && this.hasDanielVisionEffect(currentRoom);
     if (currentRoom && !danielLimitsVision) {
-      this.visibilityMaskShape.fillRect(
+      this.visibilityMaskShape.fillRoundedRect(
         (currentRoom.x - 1) * TILE_SIZE,
         (currentRoom.y - 1) * TILE_SIZE,
         (currentRoom.width + 2) * TILE_SIZE,
         (currentRoom.height + 2) * TILE_SIZE,
+        TILE_SIZE / 2,
       );
     } else {
       const corridorVisibilityRadius = danielLimitsVision ? 1.5 : this.hasEquipEffect(1) ? 2.5 : 1.5;
-      this.visibilityMaskShape.fillRect(
+      this.visibilityMaskShape.fillRoundedRect(
         heroCenterX - TILE_SIZE * corridorVisibilityRadius,
         heroCenterY - TILE_SIZE * corridorVisibilityRadius,
         TILE_SIZE * corridorVisibilityRadius * 2,
         TILE_SIZE * corridorVisibilityRadius * 2,
+        TILE_SIZE / 2,
       );
     }
 
@@ -1110,7 +1132,21 @@ class DungeonTestScene extends Phaser.Scene {
     }
   }
 
+  createDiagonalInputGrid() {
+    const width = this.dungeonTiles[0].length * TILE_SIZE;
+    const height = this.dungeonTiles.length * TILE_SIZE;
+    this.diagonalInputGrid = this.add.graphics().setDepth(0.2).setVisible(false);
+    this.diagonalInputGrid.lineStyle(1, 0xffffff, 0.3);
+    for (let x = 0; x <= width; x += TILE_SIZE) {
+      this.diagonalInputGrid.lineBetween(x, 0, x, height);
+    }
+    for (let y = 0; y <= height; y += TILE_SIZE) {
+      this.diagonalInputGrid.lineBetween(0, y, width, y);
+    }
+  }
+
   updateDiagonalInputIndicators() {
+    this.diagonalInputGrid.setVisible(Boolean(this.diagonalOnlyKey?.isDown));
     if (!this.diagonalOnlyKey?.isDown) {
       this.diagonalInputIndicators.setVisible(false);
       return;
@@ -3012,12 +3048,14 @@ class DungeonTestScene extends Phaser.Scene {
       const marker = this.add.graphics().setDepth(tileY + 0.5);
       const x = (tileX + 0.5) * TILE_SIZE;
       const y = (tileY + 0.5) * TILE_SIZE;
+      marker.setPosition(x, y);
       marker.fillStyle(0x3c2417, 1);
-      marker.fillRoundedRect(x - 18, y - 28, 36, 56, 5);
+      marker.fillRoundedRect(-18, -28, 36, 56, 5);
       marker.lineStyle(3, 0xd9b85a, 1);
-      marker.strokeRoundedRect(x - 18, y - 28, 36, 56, 5);
-      marker.lineBetween(x - 12, y - 4, x + 12, y - 4);
-      marker.lineBetween(x, y - 16, x, y + 10);
+      marker.strokeRoundedRect(-18, -28, 36, 56, 5);
+      marker.lineBetween(-12, -4, 12, -4);
+      marker.lineBetween(0, -16, 0, 10);
+      this.addGroundShadow(marker, 28, 10, 20);
       this.floorItems.push({ ...item, tileX, tileY, marker });
       return;
     }
@@ -3036,6 +3074,7 @@ class DungeonTestScene extends Phaser.Scene {
       (tileY + 0.5) * TILE_SIZE,
       iconKey,
     ).setDisplaySize(40, 40).setDepth(tileY + 0.5);
+    this.addGroundShadow(marker, 28, 10);
     this.floorItems.push({ ...item, tileX, tileY, marker });
   }
 
@@ -3216,6 +3255,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     this.isGameOver = true;
     if (!succeeded) {
+      this.isHeroFallen = true;
       this.idleTween?.stop();
       this.tweens.killTweensOf(this.hero);
       this.hero

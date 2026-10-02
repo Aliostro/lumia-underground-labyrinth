@@ -122,9 +122,10 @@ class StatusUi {
       playerStatus.getExperienceToNextLevel(),
       0x76d7ea,
       levelWidth - 28,
+      0xace9f3,
     );
-    this.drawGauge(healthX, playerStatus.hitPoints, playerStatus.maxHitPoints, 0xdf5b62, statWidth - 28);
-    this.drawGauge(hungerX, playerStatus.hunger, playerStatus.maxHunger, 0xe7bc52, statWidth - 28);
+    this.drawGauge(healthX, playerStatus.hitPoints, playerStatus.maxHitPoints, 0xdf5b62, statWidth - 28, 0xf0979c);
+    this.drawGauge(hungerX, playerStatus.hunger, playerStatus.maxHunger, 0xe7bc52, statWidth - 28, 0xf5d893);
     this.levelText.setText(`Lv ${playerStatus.level}`);
     this.hitPointsText.setText(`${playerStatus.hitPoints} / ${playerStatus.maxHitPoints}`);
     const hitPointsColor = playerStatus.brandTurns > 0 ? '#ffdc4a' : '#f3f1e8';
@@ -147,14 +148,18 @@ class StatusUi {
     });
   }
 
-  drawGauge(x, value, maximum, color, width) {
+  drawGauge(x, value, maximum, color, width, highlightColor = null) {
     const gaugeX = x + 14;
     const gaugeY = this.y + 49;
     const gaugeHeight = 14;
     const ratio = Phaser.Math.Clamp(value / maximum, 0, 1);
     this.graphics.fillStyle(0x17212a, 1);
     this.graphics.fillRect(gaugeX, gaugeY, width, gaugeHeight);
-    this.graphics.fillStyle(color, 1);
+    if (highlightColor == null) {
+      this.graphics.fillStyle(color, 1);
+    } else {
+      this.graphics.fillGradientStyle(highlightColor, highlightColor, color, color, 1);
+    }
     this.graphics.fillRect(gaugeX, gaugeY, width * ratio, gaugeHeight);
   }
 }

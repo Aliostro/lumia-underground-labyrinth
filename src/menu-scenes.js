@@ -265,17 +265,22 @@ class TitleScene extends Phaser.Scene {
   }
 
   createDungeonBackground() {
-    const dungeon = new DungeonGenerator().generate({
-      waterChance: 15,
-      minimumPonds: 2,
-      maximumPonds: 6,
-    });
-    const mapChipNumber = Phaser.Math.Between(1, 5);
+    const dungeonKey = Phaser.Utils.Array.GetRandom([
+      'dungeon-data-0001', 'dungeon-data-0002', 'dungeon-data-0003', 'dungeon-data-0004',
+    ]);
+    this.backgroundDungeonData = GameData.parseDungeonData(this.cache.text.get(dungeonKey));
+    this.backgroundFloor = Phaser.Math.Between(1, this.backgroundDungeonData.maxFloor);
+    const design = this.backgroundDungeonData.designMap.get(this.backgroundFloor) ?? {
+      mapChipNumber: 1, waterChance: 0, minimumPonds: 0, maximumPonds: 0,
+    };
+    const dungeon = new DungeonGenerator().generate(design);
+    const mapChipNumber = design.mapChipNumber;
     const renderer = new DungeonRenderer(this, {
       tileSize: TILE_SIZE,
       floorTile: FLOOR_TILE,
       corridorTile: CORRIDOR_TILE,
       waterTile: WATER_TILE,
+      iceTile: ICE_TILE,
       waterKey: 'water',
       decorationChance: FLOOR_DECORATION_CHANCE,
       chunkSize: MAP_CHUNK_SIZE,
@@ -284,7 +289,7 @@ class TitleScene extends Phaser.Scene {
       mapChipKey: `map-chips-${String(mapChipNumber).padStart(4, '0')}`,
     });
     renderer.draw(dungeon);
-    const backgroundScale = 0.25;
+    const backgroundScale = 0.35;
     const mapWidth = dungeon.tiles[0].length * TILE_SIZE;
     const mapHeight = dungeon.tiles.length * TILE_SIZE;
     const offsetX = (GAME_WIDTH - mapWidth * backgroundScale) / 2;
@@ -292,73 +297,154 @@ class TitleScene extends Phaser.Scene {
     renderer.mapChunks.forEach((chunk) => chunk
       .setScale(backgroundScale)
       .setPosition(chunk.x * backgroundScale + offsetX, chunk.y * backgroundScale + offsetY));
-    const occupiedTiles = this.placeBackgroundEnemies(dungeon, backgroundScale, offsetX, offsetY);
-    this.placeBackgroundItems(dungeon, backgroundScale, offsetX, offsetY, occupiedTiles);
+    this.placeBackgroundEnemies(dungeon, backgroundScale, offsetX, offsetY);
+    this.placeBackgroundItems(dungeon, backgroundScale, offsetX, offsetY);
     this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x101820, 0.72)
       .setDepth(-0.5);
   }
 
   placeBackgroundEnemies(dungeon, scale, offsetX, offsetY) {
-    const enemyDefinitions = GameData.parseEnemyData(this.cache.text.get('enemy-data'))
-      .filter((enemy) => this.textures.exists(enemy.imageFile));
-    if (enemyDefinitions.length === 0) {
+    const floorEnemies = this.backgroundDungeonData.enemyMap.get(this.backgroundFloor);
+    const enemyDefinitions = new Map(GameData.parseEnemyData(this.cache.text.get('enemy-data'))
+      .filter((enemy) => this.textures.exists(enemy.imageFile))
+      .map((enemy) => [enemy.id, enemy]));
+    const entries = floorEnemies?.entries.filter((entry) => enemyDefinitions.has(entry.id)) ?? [];
+    this.backgroundMonsterHouseTiles = [];
+    if (entries.length === 0) {
       return new Set();
     }
     const availableTiles = dungeon.rooms.flatMap((room) => {
       const tiles = [];
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (dungeon.tiles[y]?.[x] === FLOOR_TILE) {
+          if ([FLOOR_TILE, CORRIDOR_TILE, ICE_TILE].includes(dungeon.tiles[y]?.[x])) {
             tiles.push({ x, y });
           }
         }
       }
       return tiles;
     });
-    const count = Math.min(Phaser.Math.Between(8, 12), availableTiles.length);
+    const count = Math.min(
+      Phaser.Math.Between(floorEnemies.minimumEnemies, floorEnemies.maximumEnemies),
+      this.backgroundDungeonData.maxEnemies,
+      availableTiles.length,
+    );
     Phaser.Utils.Array.Shuffle(availableTiles);
     const occupiedTiles = new Set();
-    for (let index = 0; index < count; index += 1) {
-      const position = availableTiles[index];
-      const enemy = Phaser.Utils.Array.GetRandom(enemyDefinitions);
-      this.add.image(
-        offsetX + (position.x + 0.5) * TILE_SIZE * scale,
-        offsetY + (position.y + 1) * TILE_SIZE * scale,
-        enemy.imageFile,
-      ).setOrigin(0.5, 1).setDisplaySize(ENEMY_DISPLAY_SIZE * scale, ENEMY_DISPLAY_SIZE * scale).setDepth(-0.75);
+    const placeEnemy = (position) => {
+      const enemy = enemyDefinitions.get(this.chooseBackgroundEntry(entries).id);
+      this.placeBackgroundSprite(position, enemy.imageFile, scale, offsetX, offsetY, true);
       occupiedTiles.add(`${position.x},${position.y}`);
+    };
+    for (let index = 0; index < count; index += 1) {
+      placeEnemy(availableTiles[index]);
+    }
+    if (Math.random() * 100 < floorEnemies.monsterHouseChance) {
+      const candidates = dungeon.rooms.map((room) => {
+        const tiles = availableTiles.filter((tile) => tile.x >= room.x && tile.x < room.x + room.width
+          && tile.y >= room.y && tile.y < room.y + room.height);
+        const enemyTiles = tiles.filter((tile) => occupiedTiles.has(`${tile.x},${tile.y}`));
+        const openTiles = tiles.filter((tile) => !occupiedTiles.has(`${tile.x},${tile.y}`));
+        const targetCount = Math.ceil(tiles.length * 0.5);
+        return { enemyTiles, openTiles, targetCount };
+      }).filter((candidate) => candidate.targetCount > 0
+        && occupiedTiles.size - candidate.enemyTiles.length + candidate.targetCount
+          <= this.backgroundDungeonData.maxEnemies);
+      const house = Phaser.Utils.Array.GetRandom(candidates);
+      if (house) {
+        const spawnTiles = Phaser.Utils.Array.Shuffle(house.openTiles)
+          .slice(0, Math.max(0, house.targetCount - house.enemyTiles.length));
+        spawnTiles.forEach(placeEnemy);
+        this.backgroundMonsterHouseTiles = [...house.enemyTiles, ...spawnTiles];
+      }
     }
     return occupiedTiles;
   }
 
-  placeBackgroundItems(dungeon, scale, offsetX, offsetY, occupiedTiles) {
-    const itemDefinitions = [...GameData.parseItemData(this.cache.text.get('item-data')).values()];
-    if (itemDefinitions.length === 0) {
+  placeBackgroundItems(dungeon, scale, offsetX, offsetY) {
+    const floorItems = this.backgroundDungeonData.itemMap.get(this.backgroundFloor);
+    const itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
+    if (!floorItems || itemDefinitions.size === 0) {
       return;
     }
+    const entries = floorItems.entries.filter((entry) => itemDefinitions.has(entry.id));
     const availableTiles = dungeon.rooms.flatMap((room) => {
       const tiles = [];
       for (let y = room.y; y < room.y + room.height; y += 1) {
         for (let x = room.x; x < room.x + room.width; x += 1) {
-          if (dungeon.tiles[y]?.[x] === FLOOR_TILE && !occupiedTiles.has(`${x},${y}`)) {
+          if ([FLOOR_TILE, CORRIDOR_TILE, ICE_TILE].includes(dungeon.tiles[y]?.[x])) {
             tiles.push({ x, y });
           }
         }
       }
       return tiles;
     });
-    const count = Math.min(Phaser.Math.Between(9, 12), availableTiles.length);
+    const count = Phaser.Math.Between(floorItems.minimumItems, floorItems.maximumItems);
     Phaser.Utils.Array.Shuffle(availableTiles);
-    for (let index = 0; index < count; index += 1) {
-      const position = availableTiles[index];
-      const item = Phaser.Utils.Array.GetRandom(itemDefinitions);
+    const itemTiles = new Set();
+    const placeItem = (position, entry) => {
+      const item = itemDefinitions.get(entry?.id);
+      if (!position || !item) return;
       const iconKey = ITEM_ICON_KEYS[item.category] || ITEM_ICON_KEYS[90];
-      this.add.image(
-        offsetX + (position.x + 0.5) * TILE_SIZE * scale,
-        offsetY + (position.y + 0.5) * TILE_SIZE * scale,
-        iconKey,
-      ).setDisplaySize(40 * scale, 40 * scale).setDepth(-0.7);
+      this.placeBackgroundSprite(position, iconKey, scale, offsetX, offsetY, false);
+      itemTiles.add(`${position.x},${position.y}`);
+    };
+    const guaranteedId = Phaser.Utils.Array.GetRandom(floorItems.guaranteedItemIds);
+    if (guaranteedId != null) {
+      placeItem(availableTiles.pop(), { id: guaranteedId });
     }
+    for (let index = 0; index < count && availableTiles.length > 0; index += 1) {
+      placeItem(availableTiles.pop(), this.chooseBackgroundEntry(entries));
+    }
+    if (floorItems.recipeDropEnabled) {
+      const registeredIds = RecipeBook.getRegisteredIds();
+      const recipes = [...itemDefinitions.values()].filter((item) => item.category === 80);
+      const recipeCount = Math.max(
+        Phaser.Math.Between(floorItems.minimumRecipeItems, floorItems.maximumRecipeItems),
+        recipes.some((item) => !registeredIds.has(item.id)) ? 1 : 0,
+      );
+      const spawnedIds = new Set();
+      for (let index = 0; index < recipeCount && availableTiles.length > 0; index += 1) {
+        let candidates = recipes.filter((item) => !spawnedIds.has(item.id));
+        if (index === 0 && candidates.some((item) => !registeredIds.has(item.id))) {
+          candidates = candidates.filter((item) => !registeredIds.has(item.id));
+        }
+        const entry = this.chooseBackgroundEntry(candidates.map((item) => ({
+          id: item.id, weight: registeredIds.has(item.id) ? 2 : 8,
+        })));
+        if (!entry) break;
+        placeItem(availableTiles.pop(), entry);
+        spawnedIds.add(entry.id);
+      }
+    }
+    for (const position of this.backgroundMonsterHouseTiles) {
+      if (!itemTiles.has(`${position.x},${position.y}`)) {
+        placeItem(position, this.chooseBackgroundEntry(entries));
+      }
+    }
+  }
+
+  chooseBackgroundEntry(entries) {
+    const totalWeight = entries.reduce((total, entry) => total + entry.weight, 0);
+    let roll = Math.random() * totalWeight;
+    for (const entry of entries) {
+      roll -= entry.weight;
+      if (roll < 0) return entry;
+    }
+    return entries.at(-1) ?? null;
+  }
+
+  placeBackgroundSprite(position, key, scale, offsetX, offsetY, isEnemy) {
+    const x = offsetX + (position.x + 0.5) * TILE_SIZE * scale;
+    const y = offsetY + (position.y + (isEnemy ? 1 : 0.5)) * TILE_SIZE * scale;
+    this.add.ellipse(
+      x, y + (isEnemy ? -8 : 12) * scale,
+      (isEnemy ? 48 : 28) * scale, (isEnemy ? 16 : 10) * scale,
+      0x000000, 0.28,
+    ).setDepth(-0.9);
+    const size = (isEnemy ? ENEMY_DISPLAY_SIZE : 40) * scale;
+    this.add.image(x, y, key).setOrigin(0.5, isEnemy ? 1 : 0.5)
+      .setDisplaySize(size, size).setDepth(isEnemy ? -0.75 : -0.7);
   }
 
   create() {

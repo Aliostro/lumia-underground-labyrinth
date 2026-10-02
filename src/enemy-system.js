@@ -45,6 +45,7 @@ const EnemySystem = {
       (position.y + 1) * TILE_SIZE,
       'Chara9900.png',
     ).setOrigin(0.5, 1).setDisplaySize(ENEMY_DISPLAY_SIZE, ENEMY_DISPLAY_SIZE);
+    this.addGroundShadow(sprite);
     this.updateCharacterDepth(sprite, position.y);
     this.lumi = { tileX: position.x, tileY: position.y, sprite };
     this.clearWaterInRoom(this.getRoomAt(position.x, position.y));
@@ -149,6 +150,7 @@ const EnemySystem = {
     );
     sprite.setOrigin(0.5, 1);
     sprite.setDisplaySize(ENEMY_DISPLAY_SIZE, ENEMY_DISPLAY_SIZE);
+    this.addGroundShadow(sprite);
     this.updateCharacterDepth(sprite, spawnPosition.y);
     const enemy = {
       ...definition,

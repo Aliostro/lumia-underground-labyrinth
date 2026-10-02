@@ -13,12 +13,19 @@ class DungeonRenderer {
     this.tileEraser = this.scene.make.graphics({ add: false });
     this.tileEraser.fillStyle(0xffffff, 1);
     this.tileEraser.fillRect(0, 0, this.tileSize, this.tileSize);
+    this.waterBorder = this.scene.make.graphics({ add: false });
+    this.wallShadow = this.scene.make.graphics({ add: false });
+    const shadowHeight = Math.round(this.tileSize * 0.2);
+    for (let row = 0; row < shadowHeight; row += 1) {
+      this.wallShadow.fillStyle(0x000000, 0.26 * (1 - row / shadowHeight));
+      this.wallShadow.fillRect(0, row, this.tileSize, 1);
+    }
     this.iceSurface = this.scene.make.graphics({ add: false });
     this.iceSurface.fillStyle(0xd9f7ff, 0.62);
     this.iceSurface.fillRect(0, 0, this.tileSize, this.tileSize);
     this.iceSurface.fillStyle(0xffffff, 0.3);
     this.iceSurface.fillCircle(20, 20, 18);
-    this.iceSurface.fillCircle(47, 43, 22);
+    this.iceSurface.fillCircle(47, 43, 15);
     this.iceSurface.lineStyle(1, 0xffffff, 0.92);
     this.iceSurface.lineBetween(3, 15, 17, 20);
     this.iceSurface.lineBetween(17, 20, 25, 14);
@@ -68,6 +75,7 @@ class DungeonRenderer {
       this.chunkSize * this.tileSize,
       this.chunkSize * this.tileSize,
     ).setOrigin(0).setDepth(-1);
+    texture.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
     for (let y = 0; y < this.chunkSize; y += 1) {
       for (let x = 0; x < this.chunkSize; x += 1) {
         this.drawMapTile(texture, startX + x, startY + y, x, y);
@@ -83,7 +91,7 @@ class DungeonRenderer {
       texture.erase(this.tileEraser, drawX, drawY);
     }
     const tile = this.tiles[tileY]?.[tileX];
-    if (this.isOuterWallTile(tileX, tileY)) {
+    if (tile === undefined) {
       texture.drawFrame(this.mapChipKey, 0, drawX, drawY);
     } else if (tile === this.waterTile || tile === this.iceTile) {
       this.waterSprite.setPosition(drawX, drawY);
@@ -91,24 +99,55 @@ class DungeonRenderer {
       if (tile === this.iceTile) {
         this.iceSurface.setPosition(drawX, drawY);
         texture.draw(this.iceSurface);
+      } else {
+        this.drawWaterBorder(texture, tileX, tileY, drawX, drawY);
       }
     } else {
       const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
       texture.drawFrame(this.mapChipKey, frame, drawX, drawY);
     }
+    const isGround = tile === this.floorTile || tile === this.corridorTile
+      || tile === this.waterTile || tile === this.iceTile;
+    if (isGround && this.tiles[tileY - 1]?.[tileX] === 0) {
+      this.wallShadow.setPosition(drawX, drawY);
+      texture.draw(this.wallShadow);
+    }
   }
 
-  isOuterWallTile(tileX, tileY) {
-    return tileX <= 0
-      || tileY <= 0
-      || tileX >= this.tiles[0].length - 1
-      || tileY >= this.tiles.length - 1;
+  drawWaterBorder(texture, tileX, tileY, drawX, drawY) {
+    const size = this.tileSize;
+    const edges = [
+      { direction: [0, -1], border: [0, 0, size, 3], highlight: [0, 1, size, 1] },
+      { direction: [1, 0], border: [size - 3, 0, 3, size], highlight: [size - 2, 0, 1, size] },
+      { direction: [0, 1], border: [0, size - 3, size, 3], highlight: [0, size - 2, size, 1] },
+      { direction: [-1, 0], border: [0, 0, 3, size], highlight: [1, 0, 1, size] },
+    ];
+    this.waterBorder.clear().setPosition(drawX, drawY);
+    let hasBorder = false;
+    for (const edge of edges) {
+      const [offsetX, offsetY] = edge.direction;
+      const neighbor = this.tiles[tileY + offsetY]?.[tileX + offsetX];
+      if (neighbor !== this.floorTile && neighbor !== this.corridorTile && neighbor !== this.iceTile) {
+        continue;
+      }
+      this.waterBorder.fillStyle(0x1b4652, 0.65);
+      this.waterBorder.fillRect(...edge.border);
+      this.waterBorder.fillStyle(0xb7e8e2, 0.8);
+      this.waterBorder.fillRect(...edge.highlight);
+      hasBorder = true;
+    }
+    if (hasBorder) {
+      texture.draw(this.waterBorder);
+    }
   }
 
   refreshTiles(tiles) {
     const updatedTiles = new Set();
     tiles.forEach((tile) => {
-      [[tile.x, tile.y], [tile.x, tile.y - 1]].forEach(([x, y]) => {
+      [
+        [tile.x, tile.y], [tile.x, tile.y - 1], [tile.x + 1, tile.y],
+        [tile.x, tile.y + 1], [tile.x - 1, tile.y],
+      ].forEach(([x, y]) => {
         if (this.tiles[y]?.[x] === undefined) {
           return;
         }
