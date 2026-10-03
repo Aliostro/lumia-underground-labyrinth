@@ -250,7 +250,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
     this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
-    [1, 2, 3, 4, 5].forEach((number) => {
+    [1, 2, 3, 4, 5, 6].forEach((number) => {
       this.load.spritesheet(`map-chips-${String(number).padStart(4, '0')}`, `assets/image/MapChip${String(number).padStart(4, '0')}.png`, {
         frameWidth: TILE_SIZE,
         frameHeight: TILE_SIZE,

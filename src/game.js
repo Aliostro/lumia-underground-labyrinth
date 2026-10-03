@@ -31,6 +31,10 @@ class DungeonTestScene extends Phaser.Scene {
       frameWidth: TILE_SIZE,
       frameHeight: TILE_SIZE,
     });
+    this.load.spritesheet('map-chips-0006', 'assets/image/MapChip0006.png', {
+      frameWidth: TILE_SIZE,
+      frameHeight: TILE_SIZE,
+    });
     this.load.image('water', 'assets/image/Water.png');
     this.load.image('bridge', 'assets/image/Bridge.png');
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
