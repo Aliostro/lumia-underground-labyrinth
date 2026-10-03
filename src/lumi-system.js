@@ -106,10 +106,8 @@ const LumiSystem = {
   },
 
   getLumiOfferItemIds() {
-    const itemEntries = this.dungeonData.itemMap.get(this.playerStatus.floor)?.entries ?? [];
-    return [...new Set(itemEntries
-      .map((entry) => entry.id)
-      .filter((itemId) => this.itemDefinitions.get(itemId)?.category === 90))];
+    return [9000, 9001, 9002, 9003, 9004, 9005, 9007, 9010, 9011, 9012, 9015, 9017]
+      .filter((itemId) => this.itemDefinitions.get(itemId)?.category === 90);
   },
 
   refreshLumiExchangeUi() {

@@ -5,9 +5,10 @@ const DUNGEON_CLEAR_STORAGE_KEY = 'lumia-underground-labyrinth-cleared-dungeons'
 const SUSPENDED_RUN_STORAGE_KEY = 'lumia-underground-labyrinth-suspended-run';
 const DUNGEON_CLEAR_DISPLAYS = [
   { file: 'dungeon-0001.dat', label: 'ルミア島の地下迷宮 踏破', imageKey: 'dungeon-clear-rul', imageFile: 'IconClearRUL.png' },
+  { file: 'dungeon-0003.dat', label: '地下迷宮のさらに先 踏破', imageKey: 'dungeon-clear-lb', imageFile: 'IconClearLB.png' },
   { file: 'dungeon-0002.dat', label: 'ホテル裏の下り階段 踏破', imageKey: 'dungeon-clear-hd', imageFile: 'IconClearHD.png' },
   { file: 'dungeon-0004.dat', label: '港倉庫の秘密通路 踏破', imageKey: 'dungeon-clear-hd-below', imageFile: 'IconClearMSH.png' },
-  { file: 'dungeon-0003.dat', label: '地下迷宮のさらに先 踏破', imageKey: 'dungeon-clear-lb', imageFile: 'IconClearLB.png' },
+  { file: 'dungeon-0005.dat', label: '花咲き乱れる森 踏破', imageKey: 'dungeon-clear-flower', imageFile: 'IconFlower.png' },
 ];
 const PLAYER_SKINS = [
   { key: 'player-skin-default', file: 'Chara0001.png', label: 'デフォルト' },
@@ -17,7 +18,9 @@ const PLAYER_SKINS = [
 
 function saveSuspendedRun(run) {
   try {
-    window.localStorage.setItem(SUSPENDED_RUN_STORAGE_KEY, JSON.stringify(run));
+    const now = Date.now();
+    const elapsedGameTimeMs = Math.max(0, now - (run.playerStatus.runStartedAt ?? now));
+    window.localStorage.setItem(SUSPENDED_RUN_STORAGE_KEY, JSON.stringify({ ...run, elapsedGameTimeMs }));
     return true;
   } catch {
     return false;
@@ -29,6 +32,9 @@ function takeSuspendedRun() {
     const savedValue = window.localStorage.getItem(SUSPENDED_RUN_STORAGE_KEY);
     window.localStorage.removeItem(SUSPENDED_RUN_STORAGE_KEY);
     const run = JSON.parse(savedValue ?? 'null');
+    if (run?.playerStatus && Number.isFinite(run.elapsedGameTimeMs)) {
+      run.playerStatus.runStartedAt = Date.now() - Math.max(0, run.elapsedGameTimeMs);
+    }
     return run && typeof run === 'object' ? run : null;
   } catch {
     return null;
@@ -222,12 +228,14 @@ class TitleScene extends Phaser.Scene {
     this.load.audio('se-saint-bomb', 'assets/audio/SESaintBomb.mp3');
     this.load.audio('se-sogeki', 'assets/audio/SESogeki.mp3');
     this.load.audio('se-sogeki-ready', 'assets/audio/SESogekiReady.mp3');
+    this.load.audio('se-stamp', 'assets/audio/SEStamp.mp3');
     this.load.audio('se-sword', 'assets/audio/SESword.mp3');
     this.load.audio('se-spark', 'assets/audio/SESpark.mp3');
     this.load.audio('se-throw', 'assets/audio/SEThrow.mp3');
     this.load.audio('se-use', 'assets/audio/SEUse.mp3');
     this.load.audio('se-violin', 'assets/audio/SEViolin.mp3');
     this.load.audio('se-wana-set', 'assets/audio/SEWanaSet.mp3');
+    this.load.audio('se-lock', 'assets/audio/SELock.mp3');
     this.load.audio('se-water', 'assets/audio/SEWater.mp3');
     this.load.audio('se-warp', 'assets/audio/SEWarp.mp3');
     this.load.audio('se-wind', 'assets/audio/SEWind.mp3');
@@ -237,6 +245,7 @@ class TitleScene extends Phaser.Scene {
     this.load.text('dungeon-data-0002', `assets/data/dungeon-0002.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0003', `assets/data/dungeon-0003.dat?v=${Date.now()}`);
     this.load.text('dungeon-data-0004', `assets/data/dungeon-0004.dat?v=${Date.now()}`);
+    this.load.text('dungeon-data-0005', `assets/data/dungeon-0005.dat?v=${Date.now()}`);
     this.load.text('item-data', `assets/data/item.csv?v=${Date.now()}`);
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
@@ -266,7 +275,7 @@ class TitleScene extends Phaser.Scene {
 
   createDungeonBackground() {
     const dungeonKey = Phaser.Utils.Array.GetRandom([
-      'dungeon-data-0001', 'dungeon-data-0002', 'dungeon-data-0003', 'dungeon-data-0004',
+      'dungeon-data-0001', 'dungeon-data-0002', 'dungeon-data-0003', 'dungeon-data-0004', 'dungeon-data-0005',
     ]);
     this.backgroundDungeonData = GameData.parseDungeonData(this.cache.text.get(dungeonKey));
     this.backgroundFloor = Phaser.Math.Between(1, this.backgroundDungeonData.maxFloor);
@@ -474,6 +483,17 @@ class TitleScene extends Phaser.Scene {
       fontSize: '18px',
       color: '#9ab5c7',
     }).setOrigin(1, 1);
+    this.dungeonTextDisplay = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 8, '', {
+      fontFamily: 'Yusei Magic, sans-serif',
+      fontSize: '20px',
+      color: '#f3f1e8',
+      stroke: '#05080c',
+      strokeThickness: 3,
+      align: 'center',
+      lineSpacing: 2,
+      maxLines: 2,
+      wordWrap: { width: GAME_WIDTH - 320, useAdvancedWrap: true },
+    }).setOrigin(0.5, 1);
     this.createDungeonClearDisplays();
     this.add.text(GAME_WIDTH / 2, 315, 'メニュー', {
       fontFamily: 'Yusei Magic, sans-serif',
@@ -489,6 +509,7 @@ class TitleScene extends Phaser.Scene {
       { key: 'dungeon-data-0002', file: 'dungeon-0002.dat' },
       { key: 'dungeon-data-0003', file: 'dungeon-0003.dat' },
       { key: 'dungeon-data-0004', file: 'dungeon-0004.dat' },
+      { key: 'dungeon-data-0005', file: 'dungeon-0005.dat' },
     ].map((option) => ({
       ...option,
       data: GameData.parseDungeonData(this.cache.text.get(option.key)),
@@ -508,24 +529,17 @@ class TitleScene extends Phaser.Scene {
     this.recipeBook = new RecipeBook(this, this.itemDefinitions, 20);
     this.enemyBook = new EnemyBook(this, this.enemyDefinitions, this.enemyBookDescriptions, 20);
     const isDungeon0003Unlocked = getClearedDungeonFiles().has('dungeon-0001.dat');
-    const mainMenuItems = [
-      this.createTitleMenuItem(GAME_WIDTH / 2, 394, dungeonOptions[0].data.dungeonName, () => {
-        startDungeon(dungeonOptions[0]);
-      }, dungeonOptions[0].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
-      this.createTitleMenuItem(GAME_WIDTH / 2, 470, dungeonOptions[1].data.dungeonName, () => {
-        startDungeon(dungeonOptions[1]);
-      }, dungeonOptions[1].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
-      this.createTitleMenuItem(GAME_WIDTH / 2, 546, dungeonOptions[3].data.dungeonName, () => {
-        startDungeon(dungeonOptions[3]);
-      }, dungeonOptions[3].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }),
-    ];
-    if (isDungeon0003Unlocked) {
-      mainMenuItems.push(this.createTitleMenuItem(GAME_WIDTH / 2, 622, dungeonOptions[2].data.dungeonName, () => {
-        startDungeon(dungeonOptions[2]);
-      }, dungeonOptions[2].data.dungeonDescription ?? '', { height: 70, fontSize: 26 }));
-    } else {
-      this.createTitleMenuItem(GAME_WIDTH / 2, 622, '???', () => {}, '', { height: 70, fontSize: 26, disabled: true });
-    }
+    const mainMenuItems = [0, 2, 1, 3, 4].map((index, row) => {
+      const option = dungeonOptions[index];
+      const disabled = option.file === 'dungeon-0003.dat' && !isDungeon0003Unlocked;
+      return this.createTitleMenuItem(GAME_WIDTH / 2, 394 + row * 76, disabled ? '???' : option.data.dungeonName, () => {
+        if (!disabled) {
+          startDungeon(option);
+        }
+      }, disabled ? '' : option.data.dungeonDescription ?? '', {
+        height: 70, fontSize: 26, disabled, dungeonText: disabled ? '' : option.data.dungeonText,
+      });
+    });
     const bookMenuItems = [
       this.createTitleMenuItem(1060, 420, 'レシピ図鑑', () => this.openRecipeBook(), '', { width: 280, height: 64, fontSize: 24 }),
       this.createTitleMenuItem(1060, 508, '実験体図鑑', () => this.openEnemyBook(), '', { width: 280, height: 64, fontSize: 24 }),
@@ -572,6 +586,36 @@ class TitleScene extends Phaser.Scene {
       item.column = column;
       item.row = row;
     }));
+    this.titleDungeonVisibleCount = 4;
+    this.titleDungeonScrollOffset = 0;
+    this.dungeonScrollTrack = this.add.rectangle(GAME_WIDTH / 2 + 230, 393, 18, 230, 0x101820)
+      .setOrigin(0.5, 0).setStrokeStyle(1, 0x6e8996).setInteractive({ useHandCursor: true });
+    this.dungeonScrollThumb = this.add.rectangle(GAME_WIDTH / 2 + 230, 393, 14, 230, 0xb7c6d3)
+      .setOrigin(0.5, 0).setInteractive({ useHandCursor: true });
+    this.input.setDraggable(this.dungeonScrollThumb);
+    this.dungeonScrollTrack.on('pointerdown', (pointer) => {
+      this.scrollTitleDungeons(pointer.y < this.dungeonScrollThumb.y ? -1 : 1);
+    });
+    this.dungeonScrollThumb.on('pointerover', () => this.dungeonScrollThumb.setFillStyle(0xffdc4a));
+    this.dungeonScrollThumb.on('pointerout', () => this.dungeonScrollThumb.setFillStyle(0xb7c6d3));
+    this.dungeonScrollThumb.on('drag', (pointer, dragX, dragY) => {
+      const maximumOffset = this.titleMenuColumns[1].length - this.titleDungeonVisibleCount;
+      const travel = this.dungeonScrollTrack.height - this.dungeonScrollThumb.displayHeight;
+      if (maximumOffset <= 0 || travel <= 0) {
+        return;
+      }
+      const ratio = Phaser.Math.Clamp((dragY - this.dungeonScrollTrack.y) / travel, 0, 1);
+      const offset = Math.round(ratio * maximumOffset);
+      this.scrollTitleDungeons(offset - this.titleDungeonScrollOffset);
+    });
+    this.dungeonScrollUp = this.add.text(GAME_WIDTH / 2 + 230, 375, '▲', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '20px', color: '#ffdc4a',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.dungeonScrollDown = this.add.text(GAME_WIDTH / 2 + 230, 641, '▼', {
+      fontFamily: 'Yusei Magic, sans-serif', fontSize: '20px', color: '#ffdc4a',
+    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    this.dungeonScrollUp.on('pointerdown', () => this.scrollTitleDungeons(-1));
+    this.dungeonScrollDown.on('pointerdown', () => this.scrollTitleDungeons(1));
     this.titleSelectionColumn = 1;
     this.titleSelectionRow = 0;
     this.updateTitleMenuSelection();
@@ -646,8 +690,16 @@ class TitleScene extends Phaser.Scene {
         this.getSelectedTitleMenuItem().action();
       }
     };
+    this.onTitleWheel = (pointer, gameObjects, deltaX, deltaY) => {
+      if (pointer.x >= GAME_WIDTH / 2 - 210 && pointer.x <= GAME_WIDTH / 2 + 250
+        && pointer.y >= 359 && pointer.y <= 657 && deltaY !== 0) {
+        this.scrollTitleDungeons(deltaY > 0 ? 1 : -1);
+      }
+    };
+    this.input.on('wheel', this.onTitleWheel);
     this.input.keyboard.on('keydown', this.onTitleKeyDown);
     this.events.once('shutdown', () => {
+      this.input.off('wheel', this.onTitleWheel);
       this.input.keyboard.off('keydown', this.onTitleKeyDown);
     });
     window.requestAnimationFrame(() => {
@@ -687,6 +739,9 @@ class TitleScene extends Phaser.Scene {
         child.setText(child.text);
       }
     });
+    if (this.titleMenuItems?.length) {
+      this.updateTitleMenuSelection();
+    }
   }
 
   createTitleCrown(y, color) {
@@ -825,7 +880,7 @@ class TitleScene extends Phaser.Scene {
     }
     const parallelRun = parseParallelCode(this.parallelCodeInputValue);
     if (!parallelRun) {
-      this.parallelCodeMessage.setText('1、2、または3で始まる8桁の16進数を入力してください。');
+      this.parallelCodeMessage.setText('1から5で始まる8桁の16進数を入力してください。');
       return;
     }
     const option = dungeonOptions.find((candidate) => candidate.key === parallelRun.dungeonDataKey);
@@ -913,7 +968,7 @@ class TitleScene extends Phaser.Scene {
   }
 
   createTitleMenuItem(x, y, label, action, subtitle = '', options = {}) {
-    const { width = 420, height = 84, fontSize = 30, disabled = false } = options;
+    const { width = 420, height = 84, fontSize = 30, disabled = false, dungeonText = '' } = options;
     const background = this.add.rectangle(x, y, width, height, disabled ? 0x000000 : 0x384d58)
       .setStrokeStyle(2, disabled ? 0x000000 : 0x6e8996);
     const text = this.add.text(x, y + (subtitle ? -12 : 0), label, {
@@ -927,7 +982,7 @@ class TitleScene extends Phaser.Scene {
       color: '#b7c6d3',
     }).setOrigin(0.5).setResolution(2) : null;
     if (disabled) {
-      return { background, text, subtitleText, action, disabled };
+      return { background, text, subtitleText, action, disabled, dungeonText };
     }
     background.setInteractive({ useHandCursor: true });
     text.setInteractive({ useHandCursor: true });
@@ -950,10 +1005,25 @@ class TitleScene extends Phaser.Scene {
     background.on('pointerdown', handlePointerDown);
     text.on('pointerdown', handlePointerDown);
     subtitleText?.on('pointerdown', handlePointerDown);
-    return { background, text, subtitleText, action, disabled };
+    return { background, text, subtitleText, action, disabled, dungeonText };
   }
 
   updateTitleMenuSelection() {
+    this.updateTitleDungeonScroll();
+    const dungeonText = this.getSelectedTitleMenuItem().dungeonText;
+    let fontSize = 20;
+    this.dungeonTextDisplay.setWordWrapWidth(GAME_WIDTH - 320, true)
+      .setFontSize(fontSize).setText(dungeonText).setVisible(Boolean(dungeonText));
+    while (fontSize > 1 && this.dungeonTextDisplay.getWrappedText().length > 2) {
+      fontSize -= 1;
+      this.dungeonTextDisplay.setFontSize(fontSize);
+    }
+    const wrappedText = this.dungeonTextDisplay.getWrappedText().join('\n');
+    this.dungeonTextDisplay.setWordWrapWidth(0).setText(wrappedText);
+    while (fontSize > 1 && this.dungeonTextDisplay.height > 46) {
+      fontSize -= 1;
+      this.dungeonTextDisplay.setFontSize(fontSize);
+    }
     this.titleMenuItems.forEach((item) => {
       const selected = item.column === this.titleSelectionColumn && item.row === this.titleSelectionRow;
       if (item.disabled) {
@@ -972,6 +1042,55 @@ class TitleScene extends Phaser.Scene {
 
   getSelectedTitleMenuItem() {
     return this.titleMenuColumns[this.titleSelectionColumn][this.titleSelectionRow];
+  }
+
+  updateTitleDungeonScroll() {
+    const items = this.titleMenuColumns[1];
+    const count = this.titleDungeonVisibleCount;
+    if (this.titleSelectionColumn === 1) {
+      if (this.titleSelectionRow < this.titleDungeonScrollOffset) {
+        this.titleDungeonScrollOffset = this.titleSelectionRow;
+      } else if (this.titleSelectionRow >= this.titleDungeonScrollOffset + count) {
+        this.titleDungeonScrollOffset = this.titleSelectionRow - count + 1;
+      }
+    }
+    items.forEach((item, row) => {
+      const visible = row >= this.titleDungeonScrollOffset && row < this.titleDungeonScrollOffset + count;
+      const y = 394 + (row - this.titleDungeonScrollOffset) * 76;
+      item.background.setY(y).setVisible(visible);
+      item.text.setY(y + (item.subtitleText ? -12 : 0)).setVisible(visible);
+      item.subtitleText?.setY(y + 20).setVisible(visible);
+    });
+    const maximumOffset = Math.max(0, items.length - count);
+    const scrollable = maximumOffset > 0;
+    const thumbHeight = Math.max(32, this.dungeonScrollTrack.height * Math.min(1, count / items.length));
+    const thumbY = this.dungeonScrollTrack.y
+      + (this.dungeonScrollTrack.height - thumbHeight) * this.titleDungeonScrollOffset / (maximumOffset || 1);
+    this.dungeonScrollTrack.setVisible(scrollable);
+    this.dungeonScrollThumb.setDisplaySize(14, thumbHeight).setY(thumbY).setVisible(scrollable);
+    this.dungeonScrollUp.setVisible(scrollable).setColor(this.titleDungeonScrollOffset > 0 ? '#ffdc4a' : '#64717b');
+    this.dungeonScrollDown.setVisible(scrollable).setColor(this.titleDungeonScrollOffset < maximumOffset ? '#ffdc4a' : '#64717b');
+  }
+
+  scrollTitleDungeons(direction) {
+    if (this.isTitleWindowOpen() || this.parallelCodeInputFocused) {
+      return;
+    }
+    const items = this.titleMenuColumns[1];
+    const offset = Phaser.Math.Clamp(this.titleDungeonScrollOffset + direction, 0,
+      Math.max(0, items.length - this.titleDungeonVisibleCount));
+    if (offset === this.titleDungeonScrollOffset) {
+      return;
+    }
+    let row = direction > 0 ? offset + this.titleDungeonVisibleCount - 1 : offset;
+    while (items[row]?.disabled) {
+      row -= Math.sign(direction);
+    }
+    this.titleDungeonScrollOffset = offset;
+    this.titleSelectionColumn = 1;
+    this.titleSelectionRow = row;
+    this.updateTitleMenuSelection();
+    this.sound.play('se-cursor-move');
   }
 
   moveTitleMenuSelection(code) {

@@ -1,4 +1,4 @@
-const PARALLEL_CODE_PATTERN = /^[123][0-9A-F]{7}$/;
+const PARALLEL_CODE_PATTERN = /^[1-5][0-9A-F]{7}$/;
 
 function createParallelCode(dungeonNumber) {
   const randomValue = Math.floor(Math.random() * 0x10000000).toString(16).toUpperCase().padStart(7, '0');

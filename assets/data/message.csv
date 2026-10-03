@@ -85,6 +85,8 @@
 "ENEMY_CHARLOTTE_HEALS","{enemy}「まあ、ひどい傷・・・！」{target}はHPを{amount}回復した。"
 "ENEMY_RENI_TRAP","{enemy}はなにか悪いことをしている！"
 "ENEMY_ISOL_MINE_TRAP","{enemy}「作戦準備完了。」"
+"ENEMY_BERNICE_TRAP","{enemy}「狩ってやる...」"
+"HUNTING_TRAP_TRIGGERED","狩罠を踏んだ！"
 "SPRING_TRAP_TRIGGERED","スプリングの罠を踏んだ！"
 "MINE_TRAP_TRIGGERED","地雷の罠を踏んだ！{damage}ダメージを受けた。"
 "PLAYER_TRAP_AVOIDANCE","罠避け状態になった！"

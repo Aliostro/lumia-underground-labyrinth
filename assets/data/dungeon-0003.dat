@@ -1,5 +1,6 @@
 dungeon-name  = "地下迷宮のさらに先"
 dungeon-desc  = "地下 99 階"
+dungeon-text  = "地下迷宮には続きがあった！一体どこまで続いているのか..."
 max-floor     = 99
 max-enemies   = 60
 

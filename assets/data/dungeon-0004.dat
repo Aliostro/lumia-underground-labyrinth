@@ -1,5 +1,6 @@
 dungeon-name  = "港倉庫の秘密通路"
 dungeon-desc  = "地下 50 階 - 高難度"
+dungeon-text  = "倉庫の秘密通路では、なにやら水を使った実験をしているらしい..."
 max-floor     = 50
 max-enemies   = 60
 

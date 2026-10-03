@@ -96,6 +96,7 @@ class GameData {
   static parseDungeonData(data) {
     const dungeonName = data.match(/^dungeon-name\s*=\s*"([^"]+)"/m)?.[1];
     const dungeonDescription = data.match(/^dungeon-desc\s*=\s*"([^"]+)"/m)?.[1];
+    const dungeonText = data.match(/^dungeon-text\s*=\s*"([^"]*)"/m)?.[1] ?? '';
     const maxFloor = Number(data.match(/^max-floor\s*=\s*(\d+)/m)?.[1]);
     const maxEnemies = Number(data.match(/^max-enemies\s*=\s*(\d+)/m)?.[1]);
     const startLevel = Number(data.match(/^start-level\s*=\s*(\d+)/m)?.[1]) || 1;
@@ -178,6 +179,7 @@ class GameData {
     return {
       dungeonName,
       dungeonDescription,
+      dungeonText,
       maxFloor,
       maxEnemies,
       startLevel,

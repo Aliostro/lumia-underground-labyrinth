@@ -162,6 +162,8 @@ const EnemySystem = {
       paralysisTurns: 0,
       slowSkipNextTurn: KATJA_AIMED_SHOT_SKILL_IDS.includes(definition.specialAbilityId),
       status: !startsAwake
+        && definition.id !== 900
+        && definition.id !== 901
         && definition.specialAbilityId !== ENEMY_SKILL_EMMA_DISGUISE
         && this.getInitialRandom() < SPAWN_SLEEP_CHANCE
         ? 'spawn-sleep'

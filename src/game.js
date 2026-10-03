@@ -36,6 +36,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('stairs', 'assets/image/Steps.png');
     this.load.image('WanaSpring', 'assets/image/WanaSpring.png');
     this.load.image('WanaMine', 'assets/image/WanaMine.png');
+    this.load.image('WanaKari', 'assets/image/WanaKari.png');
     this.load.text('enemy-data', `assets/data/enemy.csv?v=${Date.now()}`);
     this.load.text('enemy-skill-data', `assets/data/enemy-skill.csv?v=${Date.now()}`);
     this.load.text('enemy-book-description-data', `assets/data/enemy-book-desc.csv?v=${Date.now()}`);
@@ -103,6 +104,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.image('Chara0054.png', 'assets/image/Chara0054.png');
     this.load.image('Chara0055.png', 'assets/image/Chara0055.png');
     this.load.image('Chara0056.png', 'assets/image/Chara0056.png');
+    this.load.image('Chara0057.png', 'assets/image/Chara0057.png');
     this.load.image('Chara9000.png', 'assets/image/Chara9000.png');
     this.load.image('Chara9001.png', 'assets/image/Chara9001.png');
     this.load.image('Chara9900.png', 'assets/image/Chara9900.png');
@@ -826,6 +828,7 @@ class DungeonTestScene extends Phaser.Scene {
       heroPosition: { x: this.heroTileX, y: this.heroTileY },
       stairs: this.stairs && { x: this.stairs.x, y: this.stairs.y },
       floorItems: this.floorItems.map(serializeFloorItem),
+      traps: this.traps.map(serializeFloorItem),
       enemies: this.enemies.map(serializeEnemy),
       lumi: this.lumi && { tileX: this.lumi.tileX, tileY: this.lumi.tileY },
       floorTurn: this.floorTurn,
@@ -876,6 +879,12 @@ class DungeonTestScene extends Phaser.Scene {
       ].forEach((text) => text?.setPosition(spriteX + 34, spriteY - 90));
       this.updateCharacterDepth(enemy.sprite, enemy.tileY);
       this.updateEnemySymbolDepth(enemy);
+    });
+    (this.suspendedState.traps ?? []).forEach((trap) => {
+      const textureKey = { spring: 'WanaSpring', mine: 'WanaMine', hunting: 'WanaKari' }[trap.kind];
+      if (textureKey && this.placeTrap(trap.kind, trap.tileX, trap.tileY, textureKey, TILE_SIZE / 2)) {
+        Object.assign(this.traps[this.traps.length - 1], trap);
+      }
     });
     if (this.suspendedState.lumi) {
       this.spawnLumiAt(this.suspendedState.lumi);
@@ -3134,6 +3143,43 @@ class DungeonTestScene extends Phaser.Scene {
     return this.placeTrap('mine', tileX, tileY, 'WanaMine', TILE_SIZE / 2);
   }
 
+  placeHuntingTrap(enemy) {
+    if (!this.placeTrap('hunting', enemy.tileX, enemy.tileY, 'WanaKari', TILE_SIZE / 2)) {
+      return false;
+    }
+    enemy.huntingTrapOwnerId ??= Phaser.Utils.String.UUID();
+    const trap = this.traps[this.traps.length - 1];
+    trap.ownerId = enemy.huntingTrapOwnerId;
+    trap.revealed = true;
+    return true;
+  }
+
+  activateHuntingTrapAtHero() {
+    const trap = this.getTrapAt(this.heroTileX, this.heroTileY);
+    if (trap?.kind !== 'hunting') {
+      return false;
+    }
+    if (this.playerStatus.trapAvoidance) {
+      this.actionLog.add('TRAP_AVOIDED');
+      return false;
+    }
+    trap.marker.destroy();
+    this.traps = this.traps.filter((otherTrap) => otherTrap !== trap);
+    this.dashDirection = null;
+    this.playerStatus.bindTurns = BIND_TURN_COUNT;
+    const owner = this.enemies.find((enemy) => (
+      enemy.huntingTrapOwnerId === trap.ownerId
+      && enemy.hitPoints > 0
+    ));
+    if (owner) {
+      owner.berniceTrapTriggered = true;
+    }
+    this.playSfx('se-lock');
+    this.actionLog.add('HUNTING_TRAP_TRIGGERED');
+    this.actionLog.add('PLAYER_BOUND');
+    return true;
+  }
+
   placeTrap(kind, tileX, tileY, textureKey, size) {
     let position = { x: tileX, y: tileY };
     if (!this.isWalkableTile(this.dungeonTiles[tileY]?.[tileX]) || this.hasStaticObjectAt(tileX, tileY)) {
@@ -3376,6 +3422,7 @@ class DungeonTestScene extends Phaser.Scene {
     const actualDamage = Math.min(enemy.hitPoints, damage);
     enemy.hitPoints -= damage;
     if (actualDamage > 0) {
+      this.wakeSpawnSleepingEnemy(enemy);
       this.warpCharlotteToHealEnemy(enemy);
     }
   }
@@ -3988,6 +4035,9 @@ class DungeonTestScene extends Phaser.Scene {
         this.actionLog.add('PLAYER_BIND_ENDED');
       }
     }
+    if (moved) {
+      this.activateHuntingTrapAtHero();
+    }
     this.updateStatusUi();
   }
 
@@ -4494,6 +4544,9 @@ class DungeonTestScene extends Phaser.Scene {
         this.advanceEnemyConfusion(enemy);
         continue;
       }
+      if (this.resolveBerniceAction(enemy, attacks)) {
+        continue;
+      }
       const ianMovements = this.resolveIanTurn(enemy);
       if (ianMovements) {
         movements.push(...ianMovements);
@@ -4513,7 +4566,7 @@ class DungeonTestScene extends Phaser.Scene {
         movements.push(aldaAdvanceMovement);
         continue;
       }
-      if (this.useTiaPaint(enemy)) {
+      if (this.useTiaPaint(enemy, attacks)) {
         continue;
       }
       const tiaMovement = this.resolveTiaMovement(enemy);
@@ -4521,7 +4574,7 @@ class DungeonTestScene extends Phaser.Scene {
         movements.push(tiaMovement);
         continue;
       }
-      if (this.useMaiUpgrade(enemy)) {
+      if (this.useMaiUpgrade(enemy, attacks)) {
         continue;
       }
       const maiMovement = this.resolveMaiMovement(enemy);
@@ -6296,10 +6349,17 @@ class DungeonTestScene extends Phaser.Scene {
       [ENEMY_SKILL_MITHRIL_KATJA_AIMED_SHOT]: 30,
       [ENEMY_SKILL_ETA_KATJA_AIMED_SHOT]: Infinity,
       [ENEMY_SKILL_HAYES_AIMED_SHOT]: 20,
+      [ENEMY_SKILL_BERNICE_HUNTING_TRAP]: Infinity,
     };
     const range = aimedShotRanges[enemy.specialAbilityId];
     if (range == null) {
       return null;
+    }
+    if (enemy.specialAbilityId === ENEMY_SKILL_BERNICE_HUNTING_TRAP) {
+      if (!enemy.katjaAiming && !enemy.berniceTrapTriggered) {
+        return null;
+      }
+      enemy.berniceTrapTriggered = false;
     }
     const minimumRange = enemy.specialAbilityId === ENEMY_SKILL_HAYES_AIMED_SHOT ? 6 : 0;
     const distance = Math.max(
@@ -6792,7 +6852,7 @@ class DungeonTestScene extends Phaser.Scene {
     if (
       !enemy.trapCooldown
       && !this.getTrapAt(enemy.tileX, enemy.tileY)
-      && Math.random() < 0.1
+      && Math.random() < 0.05
       && this.placeSpringTrap(enemy.tileX, enemy.tileY)
     ) {
       enemy.trapCooldown = 20;
@@ -6863,7 +6923,7 @@ class DungeonTestScene extends Phaser.Scene {
       enemy.specialAbilityId !== ENEMY_SKILL_ISOL_MINE_TRAP
       || enemy.trapCooldown > 0
       || this.getTrapAt(enemy.tileX, enemy.tileY)
-      || Math.random() >= 0.1
+      || Math.random() >= 0.05
       || !this.placeMineTrap(enemy.tileX, enemy.tileY)
     ) {
       return false;
@@ -7499,7 +7559,7 @@ class DungeonTestScene extends Phaser.Scene {
     return enemy.patrolTarget;
   }
 
-  findShortestPathStep(enemy, target) {
+  findShortestPathStep(enemy, target, stopAdjacent = false) {
     const queue = [{ x: enemy.tileX, y: enemy.tileY, firstStep: null }];
     const visited = new Set([`${enemy.tileX},${enemy.tileY}`]);
     const enemyRoom = this.getRoomAt(enemy.tileX, enemy.tileY);
@@ -7510,7 +7570,12 @@ class DungeonTestScene extends Phaser.Scene {
 
     for (let index = 0; index < queue.length && index < maximumVisitedTiles; index += 1) {
       const current = queue[index];
-      if (current.x === target.x && current.y === target.y) {
+      if (
+        (current.x === target.x && current.y === target.y)
+        || (stopAdjacent
+          && Math.max(Math.abs(current.x - target.x), Math.abs(current.y - target.y)) <= 1
+          && this.canEnemyPassBetweenTiles(enemy, current.x, current.y, target.x - current.x, target.y - current.y))
+      ) {
         return current.firstStep;
       }
 
@@ -7536,7 +7601,8 @@ class DungeonTestScene extends Phaser.Scene {
         if (!this.canEnemyPassBetweenTiles(enemy, current.x, current.y, direction.x, direction.y)) {
           continue;
         }
-        if (this.isOccupiedByOtherEnemy(nextX, nextY, enemy)) {
+        if (this.isOccupiedByOtherEnemy(nextX, nextY, enemy)
+          || (stopAdjacent && this.isTileOccupied(nextX, nextY))) {
           continue;
         }
         visited.add(key);

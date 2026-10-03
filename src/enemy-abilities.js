@@ -1,4 +1,31 @@
 const EnemyAbilities = {
+  resolveBerniceAction(enemy, attacks) {
+    if (enemy.specialAbilityId !== ENEMY_SKILL_BERNICE_HUNTING_TRAP) {
+      return false;
+    }
+    const onCooldown = enemy.berniceTrapCooldown > 0;
+    if (onCooldown) {
+      enemy.berniceTrapCooldown -= 1;
+    }
+    const attack = this.createKatjaAimedAttack(enemy);
+    if (attack) {
+      attacks.push(attack);
+      return true;
+    }
+    if (
+      onCooldown
+      || this.getTrapAt(enemy.tileX, enemy.tileY)
+      || Math.random() >= 0.05
+      || !this.placeHuntingTrap(enemy)
+    ) {
+      return false;
+    }
+    enemy.berniceTrapCooldown = 20;
+    this.playEnemyTrapSetSfx();
+    this.actionLog.add('ENEMY_BERNICE_TRAP', { enemy: this.getEnemyLogName(enemy) });
+    return true;
+  },
+
   freezeWaterUnderElena(enemy) {
     if (
       !ELENA_FREEZE_SKILL_IDS.includes(enemy.specialAbilityId)
@@ -97,7 +124,7 @@ const EnemyAbilities = {
     ));
   },
 
-  useTiaPaint(enemy) {
+  useTiaPaint(enemy, attacks) {
     if (enemy.specialAbilityId !== ENEMY_SKILL_TIA_PAINT) {
       return false;
     }
@@ -116,12 +143,69 @@ const EnemyAbilities = {
       target.defense += 5;
     }
     this.refreshTiaPaintMarker(target);
+    attacks.push({
+      sprite: enemy.sprite,
+      targetsHero: false,
+      onStartAsync: true,
+      onStart: (complete) => {
+        this.playSfx('se-stamp');
+        if (enemy.sprite.visible && target.sprite.visible) {
+          this.playTiaPaintEffect(target, color, complete);
+        } else {
+          complete();
+        }
+      },
+    });
     this.actionLog.add('ENEMY_TIA_PAINTS', {
       enemy: this.getEnemyLogName(enemy),
       target: this.getEnemyLogName(target),
       color: { red: 'あかっ', yellow: 'きいろっ', blue: 'あおっ' }[color],
     });
     return true;
+  },
+
+  playTiaPaintEffect(target, color, onComplete) {
+    const paintColor = { red: 0xf04f4f, yellow: 0xf1ca3a, blue: 0x4c9dff }[color];
+    const width = target.sprite.displayWidth * 0.7;
+    const height = target.sprite.displayHeight * 0.65;
+    const effect = this.add.graphics().setDepth(target.sprite.depth + 2).setVisible(target.sprite.visible);
+    const outline = Array.from({ length: 24 }, (_, index) => {
+      const angle = index * Math.PI / 12;
+      const radius = index % 3 === 0 ? 0.5 : 0.32;
+      return { x: Math.cos(angle) * width * radius, y: Math.sin(angle) * height * radius };
+    });
+    effect.fillStyle(paintColor, 0.85);
+    effect.fillPoints(outline, true);
+    Array.from({ length: 8 }, (_, index) => {
+      const angle = index * Math.PI / 4 + 0.2;
+      effect.fillEllipse(Math.cos(angle) * width * 0.56, Math.sin(angle) * height * 0.56,
+        5 + index % 3, 8 + index % 4);
+    });
+    [-0.22, 0.08, 0.3].forEach((offset, index) => {
+      effect.fillRoundedRect(width * offset - 3, height * 0.1, 6, height * (0.3 + index * 0.07), 3);
+    });
+    effect.setPosition(target.sprite.x, target.sprite.y - target.sprite.displayHeight * 0.45)
+      .setScale(0.2).setAlpha(0.9);
+    this.tweens.add({
+      targets: effect,
+      scaleX: 1,
+      scaleY: 1,
+      duration: 120,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: effect,
+          y: effect.y + 8,
+          alpha: 0,
+          duration: 320,
+          ease: 'Sine.easeIn',
+          onComplete: () => {
+            effect.destroy();
+            onComplete();
+          },
+        });
+      },
+    });
   },
 
   resolveTiaMovement(enemy) {
@@ -132,15 +216,20 @@ const EnemyAbilities = {
       Math.max(Math.abs(first.tileX - enemy.tileX), Math.abs(first.tileY - enemy.tileY))
       - Math.max(Math.abs(second.tileX - enemy.tileX), Math.abs(second.tileY - enemy.tileY))
     ));
-    const target = targets[0];
-    if (!target) {
-      return null;
+    for (const target of targets) {
+      const step = this.findShortestPathStep(enemy, { x: target.tileX, y: target.tileY }, true);
+      if (!step) {
+        continue;
+      }
+      const movement = this.resolveEnemyMoveInDirection(enemy, {
+        x: step.x - enemy.tileX,
+        y: step.y - enemy.tileY,
+      });
+      if (movement) {
+        return movement;
+      }
     }
-    const step = this.findShortestPathStep(enemy, { x: target.tileX, y: target.tileY });
-    return step && this.resolveEnemyMoveInDirection(enemy, {
-      x: step.x - enemy.tileX,
-      y: step.y - enemy.tileY,
-    });
+    return null;
   },
 
   refreshTiaPaintMarker(enemy) {
@@ -171,7 +260,7 @@ const EnemyAbilities = {
     });
   },
 
-  useMaiUpgrade(enemy) {
+  useMaiUpgrade(enemy, attacks) {
     if (enemy.specialAbilityId !== ENEMY_SKILL_MAI_UPGRADE) {
       return false;
     }
@@ -181,11 +270,66 @@ const EnemyAbilities = {
       return false;
     }
     item.upgraded = true;
+    attacks.push({
+      sprite: enemy.sprite,
+      targetsHero: false,
+      onStartAsync: true,
+      onStart: (complete) => {
+        this.playSfx('se-suzu-alert');
+        if (enemy.sprite.visible) {
+          this.playMaiVeilEffect(enemy, complete);
+        } else {
+          complete();
+        }
+      },
+    });
     this.actionLog.add('ENEMY_MAI_UPGRADES_ARMOR', {
       enemy: this.getEnemyLogName(enemy),
     });
     this.refreshInventoryUi();
     return true;
+  },
+
+  playMaiVeilEffect(enemy, onComplete) {
+    const width = enemy.sprite.displayWidth * 0.95;
+    const height = enemy.sprite.displayHeight * 1.1;
+    const effect = this.add.graphics().setDepth(enemy.sprite.depth + 2).setVisible(enemy.sprite.visible);
+    const outline = Array.from({ length: 25 }, (_, index) => {
+      const angle = Math.PI + index * Math.PI / 24;
+      return { x: Math.cos(angle) * width / 2, y: Math.sin(angle) * height };
+    });
+    effect.fillStyle(0xd8fff5, 0.22);
+    effect.fillPoints(outline, true);
+    effect.lineStyle(2, 0xf3ffef, 0.8);
+    effect.strokePoints(outline, false);
+    [-0.6, -0.3, 0, 0.3, 0.6].forEach((fold) => {
+      const foldHeight = height * Math.sqrt(1 - fold * fold);
+      effect.lineStyle(3, 0xffffff, 0.28);
+      effect.lineBetween(fold * width / 2, 0, fold * width * 0.2, -foldHeight);
+    });
+    effect.setPosition(enemy.sprite.x, enemy.sprite.y).setScale(0.85, 0.2).setAlpha(0.25);
+    this.tweens.add({
+      targets: effect,
+      scaleX: 1,
+      scaleY: 1,
+      alpha: 1,
+      duration: 220,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: effect,
+          scaleX: 1.12,
+          y: effect.y - 12,
+          alpha: 0,
+          duration: 360,
+          ease: 'Sine.easeInOut',
+          onComplete: () => {
+            effect.destroy();
+            onComplete();
+          },
+        });
+      },
+    });
   },
 
   resolveMaiMovement(enemy) {

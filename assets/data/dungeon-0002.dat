@@ -1,5 +1,6 @@
 dungeon-name  = "ホテル裏の下り階段"
 dungeon-desc  = "地下 25 階 - 高難度"
+dungeon-text  = "ホテルの裏に怪しげな階段が！慎重に調査せよ。"
 max-floor     = 25
 max-enemies   = 60
 
