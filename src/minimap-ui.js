@@ -36,7 +36,10 @@ class MinimapUi {
     this.graphics.clear();
     const drawTile = (x, y, tile) => {
       if (tile === floorTile || tile === corridorTile || tile === iceTile) {
-        this.graphics.fillStyle(0x76d7ea, 0.9);
+        const initialTile = this.scene.initialDungeonTiles?.[y]?.[x];
+        const newlyWalkable = tile === iceTile || (initialTile != null
+          && initialTile !== floorTile && initialTile !== corridorTile);
+        this.graphics.fillStyle(newlyWalkable ? 0x3f7f8e : 0x76d7ea, 0.9);
         this.graphics.fillRect(originX + x * scale, originY + y * scale, scale, scale);
       }
     };

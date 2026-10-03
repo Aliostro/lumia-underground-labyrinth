@@ -480,10 +480,13 @@ const EnemyAbilities = {
     }
     enemy.lenoreConfusionCooldown = LENORE_CONFUSION_COOLDOWN_TURNS;
     const targets = [];
+    const confusionPreventedByArmor = this.playerStatus.confusionTurns === 0
+      && !this.playerStatus.confusionImmunity
+      && this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY);
     if (
       this.playerStatus.confusionTurns === 0
       && !this.playerStatus.confusionImmunity
-      && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY)
+      && !confusionPreventedByArmor
     ) {
       this.playerStatus.confusionTurns = CONFUSION_TURN_COUNT;
       targets.push({ tileX: this.heroTileX, tileY: this.heroTileY });
@@ -505,6 +508,9 @@ const EnemyAbilities = {
       onStart: (complete) => {
         this.playEnemyViolinSfx();
         this.actionLog.add('ENEMY_LENORE_CONFUSION', { enemy: this.getEnemyLogName(enemy) });
+        if (confusionPreventedByArmor) {
+          this.actionLog.add('PLAYER_CONFUSION_PREVENTED');
+        }
         if (targets.some((target) => target.tileX === this.heroTileX && target.tileY === this.heroTileY)) {
           this.actionLog.add('PLAYER_CONFUSED');
         }

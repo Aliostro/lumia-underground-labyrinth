@@ -257,6 +257,7 @@ class TitleScene extends Phaser.Scene {
       });
     });
     this.load.image('water', 'assets/image/Water.png');
+    this.load.image('bridge', 'assets/image/Bridge.png');
     DUNGEON_CLEAR_DISPLAYS.forEach(({ imageKey, imageFile }) => this.load.image(imageKey, `assets/image/${imageFile}`));
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     EnemyBook.IMAGE_FILES.forEach((file) => this.load.image(file, `assets/image/${file}`));
@@ -354,7 +355,7 @@ class TitleScene extends Phaser.Scene {
           && tile.y >= room.y && tile.y < room.y + room.height);
         const enemyTiles = tiles.filter((tile) => occupiedTiles.has(`${tile.x},${tile.y}`));
         const openTiles = tiles.filter((tile) => !occupiedTiles.has(`${tile.x},${tile.y}`));
-        const targetCount = Math.ceil(tiles.length * 0.5);
+        const targetCount = Math.ceil(tiles.length * 0.3);
         return { enemyTiles, openTiles, targetCount };
       }).filter((candidate) => candidate.targetCount > 0
         && occupiedTiles.size - candidate.enemyTiles.length + candidate.targetCount

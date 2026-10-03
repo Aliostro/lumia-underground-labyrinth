@@ -32,6 +32,7 @@ class DungeonTestScene extends Phaser.Scene {
       frameHeight: TILE_SIZE,
     });
     this.load.image('water', 'assets/image/Water.png');
+    this.load.image('bridge', 'assets/image/Bridge.png');
     PLAYER_SKINS.forEach((skin) => this.load.image(skin.key, `assets/image/${skin.file}`));
     this.load.image('stairs', 'assets/image/Steps.png');
     this.load.image('WanaSpring', 'assets/image/WanaSpring.png');
@@ -181,6 +182,7 @@ class DungeonTestScene extends Phaser.Scene {
       waterChance: 0,
       minimumPonds: 0,
       maximumPonds: 0,
+      riverChance: 0,
     };
     const dungeon = this.suspendedState
       ? {
@@ -191,8 +193,11 @@ class DungeonTestScene extends Phaser.Scene {
         waterChance: floorDesign.waterChance,
         minimumPonds: floorDesign.minimumPonds,
         maximumPonds: floorDesign.maximumPonds,
+        riverChance: floorDesign.riverChance,
       });
     this.dungeonTiles = dungeon.tiles;
+    this.initialDungeonTiles = (this.suspendedState?.initialTiles ?? dungeon.tiles)
+      .map((row) => row.slice());
     this.dungeonRooms = dungeon.rooms;
     this.corridorTiles = this.getCorridorTiles();
     this.playerStatus.runStartedAt ??= Date.now();
@@ -216,6 +221,7 @@ class DungeonTestScene extends Phaser.Scene {
       waterTile: WATER_TILE,
       iceTile: ICE_TILE,
       waterKey: 'water',
+      initialTiles: this.initialDungeonTiles,
       decorationChance: FLOOR_DECORATION_CHANCE,
       chunkSize: MAP_CHUNK_SIZE,
       marginX: OUTER_WALL_MARGIN_X,
@@ -824,6 +830,7 @@ class DungeonTestScene extends Phaser.Scene {
     };
     return {
       tiles: this.dungeonTiles,
+      initialTiles: this.initialDungeonTiles,
       rooms: this.dungeonRooms,
       heroPosition: { x: this.heroTileX, y: this.heroTileY },
       stairs: this.stairs && { x: this.stairs.x, y: this.stairs.y },
@@ -2012,8 +2019,11 @@ class DungeonTestScene extends Phaser.Scene {
     if (
       definition.useEffectId === ITEM_EFFECT_SLEEP
       && this.playerStatus.sleepTurns === 0
-      && !this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY)
     ) {
+      if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY)) {
+        this.actionLog.add('PLAYER_SLEEP_PREVENTED');
+        return;
+      }
       this.playerStatus.sleepTurns = ITEM_SLEEP_TURN_COUNT;
       this.heroSleepText.setVisible(true);
       this.actionLog.add('PLAYER_FELL_ASLEEP');
@@ -3058,12 +3068,45 @@ class DungeonTestScene extends Phaser.Scene {
       const x = (tileX + 0.5) * TILE_SIZE;
       const y = (tileY + 0.5) * TILE_SIZE;
       marker.setPosition(x, y);
-      marker.fillStyle(0x3c2417, 1);
-      marker.fillRoundedRect(-18, -28, 36, 56, 5);
+      const lidPoints = [
+        { x: -10, y: -27 }, { x: 10, y: -27 },
+        { x: 18, y: -17 }, { x: 12, y: 20 },
+        { x: -12, y: 20 }, { x: -18, y: -17 },
+      ];
+      marker.fillStyle(0x28180f, 1);
+      marker.fillPoints(lidPoints.map((point) => ({ x: point.x + 3, y: point.y + 7 })), true);
+      marker.fillStyle(0x382115, 1);
+      marker.fillPoints([
+        { x: 18, y: -17 }, { x: 21, y: -10 },
+        { x: 15, y: 27 }, { x: 12, y: 20 },
+      ], true);
+      marker.fillStyle(0x482b1b, 1);
+      marker.fillPoints([
+        { x: -12, y: 20 }, { x: 12, y: 20 },
+        { x: 15, y: 27 }, { x: -9, y: 27 },
+      ], true);
+      marker.fillStyle(0x704a30, 1);
+      marker.fillPoints(lidPoints, true);
+      marker.lineStyle(2, 0xd9b85a, 1);
+      marker.strokePoints(lidPoints, true);
+      const insetPoints = [
+        { x: -8, y: -23 }, { x: 8, y: -23 },
+        { x: 14, y: -16 }, { x: 9, y: 16 },
+        { x: -9, y: 16 }, { x: -14, y: -16 },
+      ];
+      marker.fillStyle(0x4d2f20, 1);
+      marker.fillPoints(insetPoints, true);
+      marker.lineStyle(1, 0x9c7944, 1);
+      marker.strokePoints(insetPoints, true);
+      marker.lineStyle(1, 0xf3d88d, 1);
+      marker.lineBetween(-10, -26, 10, -26);
+      marker.lineBetween(-17, -17, -11, 19);
+      marker.lineStyle(4, 0x28180f, 1);
+      marker.lineBetween(-9, -3, 11, -3);
+      marker.lineBetween(1, -14, 1, 10);
       marker.lineStyle(3, 0xd9b85a, 1);
-      marker.strokeRoundedRect(-18, -28, 36, 56, 5);
-      marker.lineBetween(-12, -4, 12, -4);
-      marker.lineBetween(0, -16, 0, 10);
+      marker.lineBetween(-10, -5, 10, -5);
+      marker.lineBetween(0, -16, 0, 8);
       this.addGroundShadow(marker, 28, 10, 20);
       this.floorItems.push({ ...item, tileX, tileY, marker });
       return;
@@ -5579,8 +5622,9 @@ class DungeonTestScene extends Phaser.Scene {
       }
     });
     if (heroDistance <= sleepWindRange) {
-      const wasSleeping = this.playerStatus.sleepTurns > 0
-        || this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY);
+      const sleepPreventedByArmor = this.playerStatus.sleepTurns === 0
+        && this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY);
+      const wasSleeping = this.playerStatus.sleepTurns > 0 || sleepPreventedByArmor;
       if (!wasSleeping) {
         this.playerStatus.sleepTurns = SLEEP_TURN_COUNT;
       }
@@ -5590,6 +5634,9 @@ class DungeonTestScene extends Phaser.Scene {
         onStart: (complete) => {
           this.playSfx('se-wind');
           this.actionLog.add('ENEMY_SLEEP_WIND', { enemy: this.getEnemyLogName(enemy) });
+          if (sleepPreventedByArmor) {
+            this.actionLog.add('PLAYER_SLEEP_PREVENTED');
+          }
           newlySleepingEnemies.forEach((target) => {
             target.sleepText.setVisible(true);
             if (this.getVisibleTiles(this.heroTileX, this.heroTileY).has(`${target.tileX},${target.tileY}`)) {
@@ -6475,8 +6522,11 @@ class DungeonTestScene extends Phaser.Scene {
         if (
           this.playerStatus.confusionTurns > 0
           || this.playerStatus.confusionImmunity
-          || this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY)
         ) {
+          return;
+        }
+        if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_CONFUSION_IMMUNITY)) {
+          this.actionLog.add('PLAYER_CONFUSION_PREVENTED');
           return;
         }
         this.playerStatus.confusionTurns = CONFUSION_TURN_COUNT;
@@ -6509,10 +6559,11 @@ class DungeonTestScene extends Phaser.Scene {
         }
         this.playerStatus.peaceTurns = PEACE_TURN_COUNT;
       } else if (status === 'sleep') {
-        if (
-          this.playerStatus.sleepTurns > 0
-          || this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY)
-        ) {
+        if (this.playerStatus.sleepTurns > 0) {
+          return;
+        }
+        if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLEEP_IMMUNITY)) {
+          this.actionLog.add('PLAYER_SLEEP_PREVENTED');
           return;
         }
         this.playerStatus.sleepTurns = SLEEP_TURN_COUNT;

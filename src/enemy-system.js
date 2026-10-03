@@ -69,7 +69,7 @@ const EnemySystem = {
       }
       const enemies = this.enemies.filter((enemy) => this.getRoomAt(enemy.tileX, enemy.tileY) === room);
       const openTiles = tiles.filter((tile) => !this.isTileOccupied(tile.x, tile.y));
-      const targetCount = Math.ceil(tiles.length * 0.5);
+      const targetCount = Math.ceil(tiles.length * 0.3);
       return { room, tiles, enemies, openTiles, targetCount };
     }).filter((candidate) => (
       candidate.room !== heroRoom
@@ -84,7 +84,7 @@ const EnemySystem = {
     this.monsterHouseAnnounced = false;
     const occupiedTiles = monsterHouse.enemies.map((enemy) => ({ x: enemy.tileX, y: enemy.tileY }));
     const spawnTiles = this.shuffleInitialItems(monsterHouse.openTiles)
-      .slice(0, monsterHouse.targetCount - occupiedTiles.length);
+      .slice(0, Math.max(0, monsterHouse.targetCount - occupiedTiles.length));
     spawnTiles.forEach((tile) => this.spawnEnemy(floorEnemies, tile));
     this.enemies
       .filter((enemy) => this.getRoomAt(enemy.tileX, enemy.tileY) === monsterHouse.room)

@@ -10,6 +10,10 @@ class DungeonRenderer {
     this.waterSprite = this.scene.make.image({ key: this.waterKey, add: false })
       .setOrigin(0)
       .setDisplaySize(this.tileSize, this.tileSize);
+    this.bridgeSprite = this.scene.make.image({ key: 'bridge', add: false })
+      .setOrigin(0.5)
+      .setDisplaySize(this.tileSize, this.tileSize);
+    this.initialTiles = options.initialTiles;
     this.tileEraser = this.scene.make.graphics({ add: false });
     this.tileEraser.fillStyle(0xffffff, 1);
     this.tileEraser.fillRect(0, 0, this.tileSize, this.tileSize);
@@ -45,6 +49,10 @@ class DungeonRenderer {
 
   draw(dungeon) {
     this.tiles = dungeon.tiles;
+    const initialTiles = this.initialTiles ?? dungeon.tiles;
+    this.bridgeAngles = initialTiles.map((row, y) => row.map((tile, x) => (
+      this.getBridgeAngle(initialTiles, x, y)
+    )));
     this.mapFrames = dungeon.tiles.map((row, y) => row.map((tile, x) => (
       this.getMapChipFrame(dungeon.tiles, x, y, tile)
     )));
@@ -102,6 +110,10 @@ class DungeonRenderer {
       } else {
         this.drawWaterBorder(texture, tileX, tileY, drawX, drawY);
       }
+    } else if (tile === this.corridorTile && this.bridgeAngles[tileY][tileX] != null) {
+      this.bridgeSprite.setPosition(drawX + this.tileSize / 2, drawY + this.tileSize / 2)
+        .setAngle(this.bridgeAngles[tileY][tileX]);
+      texture.draw(this.bridgeSprite);
     } else {
       const frame = tile === undefined ? 0 : this.mapFrames[tileY][tileX];
       texture.drawFrame(this.mapChipKey, frame, drawX, drawY);
@@ -173,6 +185,25 @@ class DungeonRenderer {
         );
       }
     });
+  }
+
+  getBridgeAngle(tiles, x, y) {
+    if (tiles[y]?.[x] !== this.corridorTile) {
+      return null;
+    }
+    const left = tiles[y]?.[x - 1];
+    const right = tiles[y]?.[x + 1];
+    const above = tiles[y - 1]?.[x];
+    const below = tiles[y + 1]?.[x];
+    if (left === this.corridorTile && right === this.corridorTile
+      && above === this.waterTile && below === this.waterTile) {
+      return 0;
+    }
+    if (above === this.corridorTile && below === this.corridorTile
+      && left === this.waterTile && right === this.waterTile) {
+      return 90;
+    }
+    return null;
   }
 
   getMapChipFrame(tiles, x, y, tile) {

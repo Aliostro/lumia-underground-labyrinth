@@ -19,6 +19,9 @@ class DungeonGenerator {
           options.maximumPonds ?? 0,
         );
         if (this.areRoomsConnected(dungeon) && !this.hasLongStraightCorridor(dungeon.tiles)) {
+          if (options.riverChance > 0 && this.random() * 100 < options.riverChance) {
+            this.placeRiver(dungeon.tiles);
+          }
           return dungeon;
         }
       } catch (error) {
@@ -27,6 +30,56 @@ class DungeonGenerator {
     }
 
     throw new Error('ダンジョンの生成に失敗しました。');
+  }
+
+  placeRiver(tiles) {
+    const vertical = this.random() < 0.5;
+    const length = vertical ? this.height : this.width;
+    const breadth = vertical ? this.width : this.height;
+    const minimumCenter = Math.floor((breadth - 28) / 2) + 2;
+    const maximumCenter = breadth - 1 - minimumCenter;
+    const chooseTargetCenter = (position) => {
+      const offset = this.randomInt(4, 8) * (this.random() < 0.5 ? -1 : 1);
+      const target = position + offset;
+      return target >= minimumCenter && target <= maximumCenter ? target : position - offset;
+    };
+    let center = this.randomInt(minimumCenter, maximumCenter);
+    let targetCenter = chooseTargetCenter(center);
+    let segmentLength = this.randomInt(8, 14);
+    let segmentStep = 0;
+    let width = this.randomInt(3, 4);
+    let targetWidth = this.randomInt(3, 4);
+    let previousStart = Math.round(center - (width - 1) / 2);
+
+    for (let step = 0; step < length; step += 1) {
+      if (segmentStep === segmentLength) {
+        center = targetCenter;
+        targetCenter = chooseTargetCenter(center);
+        segmentLength = this.randomInt(8, 14);
+        segmentStep = 0;
+        targetWidth = this.randomInt(3, 4);
+      }
+      if (step % 3 === 0) {
+        width += Math.sign(targetWidth - width);
+      }
+      const progress = segmentStep / segmentLength;
+      const curve = progress * progress * (3 - 2 * progress);
+      const position = center + (targetCenter - center) * curve;
+      const desiredStart = Math.round(position - (width - 1) / 2);
+      const start = Math.max(0, Math.min(
+        breadth - width,
+        Math.max(previousStart - 1, Math.min(previousStart + 1, desiredStart)),
+      ));
+      for (let offset = 0; offset < width; offset += 1) {
+        const tileX = vertical ? start + offset : step;
+        const tileY = vertical ? step : start + offset;
+        if (tiles[tileY][tileX] !== 1 && tiles[tileY][tileX] !== 2) {
+          tiles[tileY][tileX] = 3;
+        }
+      }
+      previousStart = start;
+      segmentStep += 1;
+    }
   }
 
   createDungeon(waterChance, minimumPonds, maximumPonds) {

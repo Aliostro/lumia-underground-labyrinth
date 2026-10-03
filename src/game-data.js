@@ -108,7 +108,7 @@ class GameData {
     const designMap = new Map();
     const designMapSection = data.split('[design-map]')[1]?.split('[enemy-map]')[0] || '';
     designMapSection.trim().split(/\r?\n/).forEach((line) => {
-      const match = line.match(/^(\d+):\s*(\d+)(?:\s*\[(\d+)(?:\s*,\s*(\d+)(?:\s*-\s*(\d+))?)?\])?\s*$/);
+      const match = line.match(/^(\d+):\s*(\d+)(?:\s*\[(\d+)(?:\s*,\s*(\d+)(?:\s*-\s*(\d+))?(?:\s*,\s*(\d+(?:\.\d+)?)\s*%?)?)?\])?\s*$/);
       if (match) {
         const minimumPonds = Number(match[4]) || 0;
         const maximumPonds = Number(match[5]) || minimumPonds;
@@ -117,6 +117,7 @@ class GameData {
           waterChance: Math.min(100, Number(match[3]) || 0),
           minimumPonds: Math.min(minimumPonds, maximumPonds),
           maximumPonds: Math.max(minimumPonds, maximumPonds),
+          riverChance: Math.min(100, Number(match[6]) || 0),
         });
       }
     });

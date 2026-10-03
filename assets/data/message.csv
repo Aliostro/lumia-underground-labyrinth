@@ -23,6 +23,8 @@
 "ENEMY_RANGED_HIT_ENEMY","{enemy}の遠距離攻撃が{target}に当たり、{damage}ダメージを与えた。"
 "ENEMY_RANGED_MISS_ENEMY","{enemy}の遠距離攻撃は{target}に回避された。"
 "PLAYER_SLOW_PREVENTED","{item}の効果で鈍足を防いだ！"
+"PLAYER_CONFUSION_PREVENTED","御史衣の効果で混乱を防いだ！"
+"PLAYER_SLEEP_PREVENTED","祭司長の礼服の効果で睡眠を防いだ！"
 "ENEMY_ADINA_MAGIC_BOLT","{enemy}の天体が{target}に当たった！"
 "ENEMY_EVOLVED","{enemy}は{evolution}に昇格した！"
 "ENEMY_IAN_POSSESSED","イアンに悪霊が憑依した！"
