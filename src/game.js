@@ -4716,6 +4716,13 @@ class DungeonTestScene extends Phaser.Scene {
         }
         movements.push(movement);
         movesTaken += 1;
+        if (
+          movesTaken < this.getEnemyMovementCount(enemy)
+          && this.transformItemUnderPriya(enemy)
+        ) {
+          movesTaken += 1;
+          break;
+        }
       }
       const lauraTheftAfterMovement = movesTaken < Math.max(
         this.getEnemyMovementCount(enemy),
