@@ -75,6 +75,14 @@ class GameData {
     }));
   }
 
+  static parseItemCraftWeightData(csv) {
+    const lines = csv.trim().split(/\r?\n/).slice(1);
+    return new Map(lines.map((line) => {
+      const fields = line.match(/"([^"]*)"/g).map((field) => field.slice(1, -1));
+      return [Number(fields[0]), Number(fields[2])];
+    }).filter(([, weight]) => Number.isInteger(weight) && weight >= 2));
+  }
+
   static parseItemData(csv) {
     const lines = csv.trim().split(/\r?\n/).slice(1);
     return new Map(lines.map((line) => {

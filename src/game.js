@@ -53,6 +53,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.load.text('item-equip-effect-data', `assets/data/item-equip-eff.csv?v=${Date.now()}`);
     this.load.text('item-effect-data', `assets/data/item-effect.csv?v=${Date.now()}`);
     this.load.text('craft-data', `assets/data/craft.csv?v=${Date.now()}`);
+    this.load.text('item-craft-weight-data', `assets/data/item-craft-weight.csv?v=${Date.now()}`);
     this.load.image('Chara0002.png', 'assets/image/Chara0002.png');
     this.load.image('Chara0003.png', 'assets/image/Chara0003.png');
     this.load.image('Chara0004.png', 'assets/image/Chara0004.png');
@@ -150,6 +151,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.itemEquipEffectDefinitions = GameData.parseItemEquipEffectData(this.cache.text.get('item-equip-effect-data'));
     this.itemEffectDefinitions = GameData.parseItemEffectData(this.cache.text.get('item-effect-data'));
     this.craftDefinitions = GameData.parseCraftData(this.cache.text.get('craft-data'));
+    this.itemCraftWeights = GameData.parseItemCraftWeightData(this.cache.text.get('item-craft-weight-data'));
     this.dungeonData = GameData.parseDungeonData(this.cache.text.get(this.dungeonDataKey));
     this.messageData = GameData.parseMessageData(this.cache.text.get('message-data'));
     this.itemDefinitions = GameData.parseItemData(this.cache.text.get('item-data'));
@@ -731,6 +733,9 @@ class DungeonTestScene extends Phaser.Scene {
       .map((definition) => definition.id);
     const unregisteredRecipeItemIds = recipeItemIds.filter((id) => !registeredRecipeIds.has(id));
     const registeredRecipeItemIds = recipeItemIds.filter((id) => registeredRecipeIds.has(id));
+    const maximumUnregisteredRecipeLoad = Math.max(...unregisteredRecipeItemIds.map(
+      (id) => this.itemCraftWeights.get(id) ?? 2,
+    ));
     const recipeItemCount = Math.max(
       this.getInitialRandomInteger(
         floorItems.minimumRecipeItems,
@@ -748,10 +753,14 @@ class DungeonTestScene extends Phaser.Scene {
         .filter((id) => !spawnedRecipeIds.has(id));
       const availableRegisteredRecipeItemIds = registeredRecipeItemIds
         .filter((id) => !spawnedRecipeIds.has(id));
+      const unregisteredRecipeCandidates = availableUnregisteredRecipeItemIds.map((id) => ({
+        id,
+        weight: 2 * 2 ** (maximumUnregisteredRecipeLoad - (this.itemCraftWeights.get(id) ?? 2)),
+      }));
       const recipeCandidates = index === 0 && availableUnregisteredRecipeItemIds.length > 0
-        ? availableUnregisteredRecipeItemIds.map((id) => ({ id, weight: 8 }))
+        ? unregisteredRecipeCandidates
         : [
-          ...availableUnregisteredRecipeItemIds.map((id) => ({ id, weight: 8 })),
+          ...unregisteredRecipeCandidates,
           ...availableRegisteredRecipeItemIds.map((id) => ({ id, weight: 2 })),
         ];
       const recipeItem = this.chooseFloorItem(recipeCandidates);
