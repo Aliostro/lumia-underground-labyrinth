@@ -1,4 +1,18 @@
 class GameData {
+  static hasItemCharge(item) {
+    return item?.id === 3000 || item?.id === 26;
+  }
+
+  static getItemCharge(item) {
+    const charge = Number(item?.charge ?? 100);
+    return Number.isFinite(charge) ? Math.max(0, Math.min(100, Math.floor(charge))) : 100;
+  }
+
+  static getItemName(item, definition) {
+    const name = definition?.name ?? 'アイテム';
+    return this.hasItemCharge(item) ? `${name}(充電: ${this.getItemCharge(item)}%)` : name;
+  }
+
   static parseEnemyData(csv) {
     const lines = csv.trim().split(/\r?\n/).slice(1);
     return lines.map((line) => {

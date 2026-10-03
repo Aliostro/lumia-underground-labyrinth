@@ -392,7 +392,7 @@ const EnemyAbilities = {
     } else {
       frozenItems.forEach((item) => {
         this.actionLog.add('ITEM_FROZEN', {
-          item: this.itemDefinitions.get(item.id)?.name ?? 'アイテム',
+          item: this.getItemLogName(item),
         });
       });
       this.refreshInventoryUi();
@@ -666,8 +666,11 @@ const EnemyAbilities = {
       return false;
     }
     const definition = this.itemDefinitions.get(item.id);
+    const itemName = this.getItemLogName(item, definition);
     item.id = 4004;
     delete item.usesRemaining;
+    delete item.charge;
+    delete item.chargeTurns;
     this.refreshInventoryUi();
     attacks.push({
       sprite: enemy.sprite,
@@ -676,7 +679,7 @@ const EnemyAbilities = {
       onStart: (complete) => {
         this.playSfx('se-magic');
         this.actionLog.add('ENEMY_ELEVEN_MEAL_TIME', { enemy: this.getEnemyLogName(enemy) });
-        this.actionLog.add('ITEM_TRANSFORMED_TO_HAMBURGER', { item: definition.name });
+        this.actionLog.add('ITEM_TRANSFORMED_TO_HAMBURGER', { item: itemName });
         this.playHeartPeaceEffects([{ tileX: this.heroTileX, tileY: this.heroTileY }], complete);
       },
     });

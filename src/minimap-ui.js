@@ -58,11 +58,7 @@ class MinimapUi {
   drawMarker() {
     const { scale, x: originX, y: originY } = this.options;
     const markerRadius = 3;
-    const detectsAllEnemies = this.scene.playerStatus.inventory.some((item) => (
-      item.equipped != null
-      && this.scene.itemDefinitions.get(item.id)?.equipEffectId === 0
-      && this.scene.itemEquipEffectDefinitions.has(0)
-    )) || this.scene.scoutDroneActive;
+    const detectsAllEnemies = this.scene.hasEquipEffect(0) || this.scene.scoutDroneActive;
     const detectsAllStairs = this.scene.empDroneActive;
     this.marker.clear();
     this.marker.fillStyle(0x3d9b57);

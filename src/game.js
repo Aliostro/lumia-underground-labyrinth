@@ -1297,6 +1297,7 @@ class DungeonTestScene extends Phaser.Scene {
       item.equipped != null
       && this.itemDefinitions.get(item.id)?.equipEffectId === effectId
       && this.itemEquipEffectDefinitions.has(effectId)
+      && (!GameData.hasItemCharge(item) || GameData.getItemCharge(item) > 0)
     ));
   }
 
@@ -1305,6 +1306,7 @@ class DungeonTestScene extends Phaser.Scene {
       item.equipped === 0
       && this.itemDefinitions.get(item.id)?.category === 0
       && this.itemDefinitions.get(item.id)?.equipEffectId === effectId
+      && (!GameData.hasItemCharge(item) || GameData.getItemCharge(item) > 0)
     ));
   }
 
@@ -1670,7 +1672,7 @@ class DungeonTestScene extends Phaser.Scene {
     }
     if (item.frozen && !['拾う', '置く', '投げる'].includes(action)) {
       this.actionLog.add('ITEM_FROZEN_CANNOT_USE', {
-        item: this.itemDefinitions.get(item.id)?.name ?? 'アイテム',
+        item: this.getItemLogName(item, definition),
       });
       this.closeInventoryMenu();
       return;
@@ -1708,7 +1710,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.pendingThrow = { item, definition, fromFloor: this.isFloorItemSelected() };
       this.inventoryUi.setVisible(false);
       this.closeInventoryMenu();
-      this.actionLog.add('ITEM_THROW_DIRECTION', { item: definition.name });
+      this.actionLog.add('ITEM_THROW_DIRECTION', { item: this.getItemLogName(item, definition) });
       return;
     }
     if (
@@ -1746,7 +1748,7 @@ class DungeonTestScene extends Phaser.Scene {
       this.pendingCraftItem = item;
       this.closeInventoryMenu();
       this.refreshInventoryUi();
-      this.actionLog.add('ITEM_CRAFT_SELECT', { item: definition.name });
+      this.actionLog.add('ITEM_CRAFT_SELECT', { item: this.getItemLogName(item, definition) });
       return;
     }
     if (action === '装備') {
@@ -1805,11 +1807,11 @@ class DungeonTestScene extends Phaser.Scene {
     }
     this.drawMinimapMarker();
     if (action === '装備') {
-      this.actionLog.add('ITEM_ACTION', { item: definition.name, action: '装備した' });
+      this.actionLog.add('ITEM_ACTION', { item: this.getItemLogName(item, definition), action: '装備した' });
     } else if (action === '外す') {
-      this.actionLog.add('ITEM_ACTION', { item: definition.name, action: '外した' });
+      this.actionLog.add('ITEM_ACTION', { item: this.getItemLogName(item, definition), action: '外した' });
     } else if (action === '置く') {
-      this.actionLog.add('ITEM_ACTION', { item: definition.name, action: '置いた' });
+      this.actionLog.add('ITEM_ACTION', { item: this.getItemLogName(item, definition), action: '置いた' });
     }
     this.consumeItemTurn();
   }
@@ -1822,6 +1824,10 @@ class DungeonTestScene extends Phaser.Scene {
       return;
     }
     const exchangedItem = { id: floorItem.id };
+    if (GameData.hasItemCharge(floorItem)) {
+      exchangedItem.charge = GameData.getItemCharge(floorItem);
+      exchangedItem.chargeTurns = floorItem.chargeTurns ?? 0;
+    }
     if (floorItem.usesRemaining != null) {
       exchangedItem.usesRemaining = floorItem.usesRemaining;
     }
@@ -1837,8 +1843,8 @@ class DungeonTestScene extends Phaser.Scene {
     this.playerStatus.updateEquipmentStats();
     this.placeFloorItem(inventoryItem, this.heroTileX, this.heroTileY);
     this.actionLog.add('ITEM_EXCHANGED', {
-      inventoryItem: this.itemDefinitions.get(inventoryItem.id)?.name ?? 'アイテム',
-      floorItem: floorDefinition.name,
+      inventoryItem: this.getItemLogName(inventoryItem),
+      floorItem: this.getItemLogName(floorItem, floorDefinition),
     });
     this.updateStatusUi();
     this.refreshInventoryUi();
@@ -1882,15 +1888,15 @@ class DungeonTestScene extends Phaser.Scene {
     )) {
       this.playSfx('se-craft-ok');
       this.actionLog.add('ITEM_CRAFT_SUCCESS', {
-        first: firstDefinition?.name ?? 'アイテム',
-        second: secondDefinition?.name ?? 'アイテム',
-        item: resultDefinition?.name ?? 'アイテム',
+        first: this.getItemLogName(firstItem, firstDefinition),
+        second: this.getItemLogName(secondItem, secondDefinition),
+        item: this.getItemLogName(this.playerStatus.inventory.at(-1), resultDefinition),
       });
     } else {
       this.playSfx('se-craft-miss');
       this.actionLog.add('ITEM_CRAFT_FAILURE', {
-        first: firstDefinition?.name ?? 'アイテム',
-        second: secondDefinition?.name ?? 'アイテム',
+        first: this.getItemLogName(firstItem, firstDefinition),
+        second: this.getItemLogName(secondItem, secondDefinition),
       });
     }
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventory.length);
@@ -2144,7 +2150,7 @@ class DungeonTestScene extends Phaser.Scene {
     const { destination, dropDestination = destination } = throwResult;
     this.selectedInventoryIndex = Math.min(this.selectedInventoryIndex, this.playerStatus.inventoryCapacity - 1);
     this.inventoryPage = Math.floor(this.selectedInventoryIndex / 10);
-    this.actionLog.add('ITEM_ACTION', { item: definition.name, action: sleepGas || volticlet || slowPowder || theDeath || theHermit || scalpel ? '撃った' : '投げた' });
+    this.actionLog.add('ITEM_ACTION', { item: this.getItemLogName(item, definition), action: sleepGas || volticlet || slowPowder || theDeath || theHermit || scalpel ? '撃った' : '投げた' });
     this.isHeroMoving = true;
     this.idleTween.stop();
     this.hero.setScale(HERO_SCALE);
@@ -2211,17 +2217,17 @@ class DungeonTestScene extends Phaser.Scene {
           this.playSfx('se-miss');
           const dropped = this.placeDroppedItem(item, throwResult.enemy.tileX, throwResult.enemy.tileY);
           this.actionLog.add('ITEM_THROW_MISS', {
-            item: definition.name,
+            item: this.getItemLogName(item, definition),
             enemy: this.getEnemyLogName(throwResult.enemy),
           });
           if (!dropped) {
-            this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+            this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(item, definition) });
           }
         } else {
           this.playSfx('se-miss');
           const dropped = this.placeDroppedItem(item, dropDestination.x, dropDestination.y);
           if (!dropped) {
-            this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+            this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(item, definition) });
           }
         }
         this.resolvePlayerTurn(false);
@@ -2601,7 +2607,7 @@ class DungeonTestScene extends Phaser.Scene {
       definition.useEffectId === ITEM_EFFECT_SCALPEL ? 'ITEM_SCALPEL_DAMAGE' : 'ITEM_THROW_DAMAGE',
       definition.useEffectId === ITEM_EFFECT_SCALPEL
         ? { enemy: this.getEnemyLogName(enemy), damage }
-        : { item: definition.name, enemy: this.getEnemyLogName(enemy), damage },
+        : { item: this.getItemLogName(item, definition), enemy: this.getEnemyLogName(enemy), damage },
     );
     this.warpEstersToDamagedEnemy(enemy);
     if (this.applyEnemySurvivalAbility(enemy) || enemy.hitPoints > 0) {
@@ -2884,10 +2890,11 @@ class DungeonTestScene extends Phaser.Scene {
     if (!definition) {
       return;
     }
-    const dropped = this.placeDroppedItem({ id: itemId }, enemy.tileX, enemy.tileY);
-    this.actionLog.add('ENEMY_DROP_ITEM', { enemy: this.getEnemyLogName(enemy), item: definition.name });
+    const droppedItem = { id: itemId };
+    const dropped = this.placeDroppedItem(droppedItem, enemy.tileX, enemy.tileY);
+    this.actionLog.add('ENEMY_DROP_ITEM', { enemy: this.getEnemyLogName(enemy), item: this.getItemLogName(droppedItem, definition) });
     if (!dropped) {
-      this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+      this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(droppedItem, definition) });
     }
   }
 
@@ -3116,6 +3123,10 @@ class DungeonTestScene extends Phaser.Scene {
       return;
     }
     const definition = this.itemDefinitions.get(item.id);
+    if (GameData.hasItemCharge(item)) {
+      item.charge = GameData.getItemCharge(item);
+      item.chargeTurns ??= 0;
+    }
     if (
       item.usesRemaining == null
       && (definition?.category === 10 || definition?.category === 50)
@@ -3318,6 +3329,9 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   applyHeroDamage(damage, cause = 'ダメージ') {
+    if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_DAMAGE)) {
+      damage *= 2;
+    }
     const holyRobeReducesDamage = damage > 0
       && this.playerStatus.hunger >= 5
       && this.hasEquipEffect(ITEM_EQUIP_EFFECT_HOLY_ROBE);
@@ -3368,7 +3382,7 @@ class DungeonTestScene extends Phaser.Scene {
     ];
     const equipment = equipmentCategories.map(({ category, label }) => {
       const item = this.playerStatus.inventory.find((inventoryItem) => inventoryItem.equipped === category);
-      const name = item ? this.itemDefinitions.get(item.id)?.name ?? 'なし' : 'なし';
+      const name = item ? this.getItemLogName(item) : 'なし';
       return `${label}: ${name}`;
     });
     const result = {
@@ -3580,7 +3594,7 @@ class DungeonTestScene extends Phaser.Scene {
   }
 
   getItemLogName(item, definition = this.itemDefinitions.get(item.id)) {
-    return `${item.upgraded && definition?.category === 20 ? '★' : ''}${definition?.name ?? 'アイテム'}${item.frozen ? '《凍結》' : ''}`;
+    return `${item.upgraded && definition?.category === 20 ? '★' : ''}${GameData.getItemName(item, definition)}${item.frozen ? '《凍結》' : ''}`;
   }
 
   isInventoryOrFloorItem(item) {
@@ -4041,7 +4055,13 @@ class DungeonTestScene extends Phaser.Scene {
     }
     this.playerStatus.confusionJustEnded = false;
     const wasBranded = this.playerStatus.brandTurns > 0;
-    this.playerStatus.advanceTurn(moved, this.hasEquipEffect(ITEM_EQUIP_EFFECT_CLAD_RING));
+    this.playerStatus.advanceTurn(
+      moved,
+      this.hasEquipEffect(ITEM_EQUIP_EFFECT_CLAD_RING),
+      this.hasEquipEffect(ITEM_EQUIP_EFFECT_RECOVERY_INCREASE) ? 1 : 0,
+      this.hasEquipEffect(ITEM_EQUIP_EFFECT_SLOW_HUNGER_LOSS),
+      this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_DAMAGE),
+    );
     if (this.playerStatus.hunger === 0) {
       this.dashDirection = null;
     }
@@ -4193,7 +4213,8 @@ class DungeonTestScene extends Phaser.Scene {
         : this.hasEquipEffect(ITEM_EQUIP_EFFECT_GREATER_RANGED_ATTACK_INCREASE)
         ? 10
         : this.hasEquipEffect(ITEM_EQUIP_EFFECT_RANGED_ATTACK_INCREASE) ? 5 : 0;
-    const damage = Math.max(1, this.playerStatus.attack + rangedAttackBonus - enemy.defense);
+    const damage = Math.max(1, this.playerStatus.attack + rangedAttackBonus - enemy.defense)
+      * (!ranged && this.hasEquipEffect(ITEM_EQUIP_EFFECT_DOUBLE_DAMAGE) ? 2 : 1);
     const hit = hasAlwaysHitEffect || (!ranged || !this.evadesProjectile(enemy)
       ? this.isAttackHit(NORMAL_ATTACK_ACCURACY)
       : false);
@@ -5187,7 +5208,7 @@ class DungeonTestScene extends Phaser.Scene {
             this.playImpactEffect(this.heroTileX, this.heroTileY);
             this.actionLog.add('ENEMY_GOLD_YUKI_DISARM', {
               enemy: this.getEnemyLogName(enemy),
-              item: definition.name,
+              item: this.getItemLogName(item, definition),
             });
             const hitEnemy = throwResult.enemy
               && !this.evadesProjectile(throwResult.enemy)
@@ -5197,16 +5218,16 @@ class DungeonTestScene extends Phaser.Scene {
             } else if (throwResult.enemy) {
               const dropped = this.placeDroppedItem(item, throwResult.enemy.tileX, throwResult.enemy.tileY);
               this.actionLog.add('ITEM_THROW_MISS', {
-                item: definition.name,
+                item: this.getItemLogName(item, definition),
                 enemy: this.getEnemyLogName(throwResult.enemy),
               });
               if (!dropped) {
-                this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+                this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(item, definition) });
               }
             } else {
               const dropped = this.placeDroppedItem(item, destination.x, destination.y);
               if (!dropped) {
-                this.actionLog.add('ITEM_DISAPPEARED', { item: definition.name });
+                this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(item, definition) });
               }
             }
             complete();
@@ -5533,7 +5554,7 @@ class DungeonTestScene extends Phaser.Scene {
       if (floorItem) {
         const definition = floorItem.kind === 'coffin' ? null : this.itemDefinitions.get(floorItem.id);
         this.removeInventoryOrFloorItem(floorItem);
-        this.actionLog.add('FIRE_PILLAR_BURNED_ITEM', { item: definition?.name ?? '棺桶' });
+        this.actionLog.add('FIRE_PILLAR_BURNED_ITEM', { item: definition ? this.getItemLogName(floorItem, definition) : '棺桶' });
       }
       if (this.heroTileX === pillar.tileX && this.heroTileY === pillar.tileY) {
         const damage = this.applyHeroDamage(10, '炎柱');
@@ -5759,13 +5780,17 @@ class DungeonTestScene extends Phaser.Scene {
       && this.canEnemyPassBetweenTiles(enemy, enemy.tileX, enemy.tileY, offsetX, offsetY);
   }
 
+  getHeroAttackAccuracy(accuracy) {
+    return Math.max(0, accuracy - (this.hasEquipEffect(ITEM_EQUIP_EFFECT_EVASION_INCREASE) ? 0.15 : 0));
+  }
+
   enemyAttack(enemy, attackCount = this.getEnemyAttackCount(enemy)) {
     enemy.idleTween?.stop();
     enemy.sprite.setScale(ENEMY_SCALE);
     enemy.needsIdleMotion = true;
     const attacks = [];
     for (let attack = 0; attack < attackCount; attack += 1) {
-      const hit = this.isAttackHit(NORMAL_ATTACK_ACCURACY);
+      const hit = this.isAttackHit(this.getHeroAttackAccuracy(NORMAL_ATTACK_ACCURACY));
       const attackData = {
         sprite: enemy.sprite,
         symbolOutline: enemy.symbolOutline,
@@ -6328,6 +6353,12 @@ class DungeonTestScene extends Phaser.Scene {
           }
           return;
         }
+        if (this.hasEquipEffect(ITEM_EQUIP_EFFECT_EVASION_INCREASE)
+          && !this.isAttackHit(this.getHeroAttackAccuracy(1))) {
+          this.playSfx('se-miss');
+          this.actionLog.add('ENEMY_MISS', { enemy: this.getEnemyLogName(enemy) });
+          return;
+        }
         if (isAdinaMagicBolt) {
           this.actionLog.add('ENEMY_ADINA_MAGIC_BOLT', {
             enemy: this.getEnemyLogName(enemy),
@@ -6679,10 +6710,10 @@ class DungeonTestScene extends Phaser.Scene {
     const dropped = this.placeDroppedItem(enemy.heldItem, enemy.tileX, enemy.tileY);
     this.actionLog.add('ENEMY_LUKE_DROPPED', {
       enemy: this.getEnemyLogName(enemy),
-      item: definition?.name ?? 'アイテム',
+      item: this.getItemLogName(enemy.heldItem, definition),
     });
     if (!dropped) {
-      this.actionLog.add('ITEM_DISAPPEARED', { item: definition?.name ?? 'アイテム' });
+      this.actionLog.add('ITEM_DISAPPEARED', { item: this.getItemLogName(enemy.heldItem, definition) });
     }
     enemy.heldItem = null;
   }
@@ -7085,13 +7116,17 @@ class DungeonTestScene extends Phaser.Scene {
       return false;
     }
     const definition = this.itemDefinitions.get(item.id);
-    enemy.heldItem = { id: item.id, usesRemaining: item.usesRemaining };
+    enemy.heldItem = {
+      id: item.id,
+      usesRemaining: item.usesRemaining,
+      ...(GameData.hasItemCharge(item) ? { charge: GameData.getItemCharge(item), chargeTurns: item.chargeTurns ?? 0 } : {}),
+    };
     item.marker.destroy();
     this.floorItems = this.floorItems.filter((floorItem) => floorItem !== item);
     this.playEnemyAlertSfx();
     this.actionLog.add('ENEMY_LUKE_PICKUP', {
       enemy: this.getEnemyLogName(enemy),
-      item: definition?.name ?? 'アイテム',
+      item: this.getItemLogName(item, definition),
     });
     return true;
   }
@@ -7144,7 +7179,7 @@ class DungeonTestScene extends Phaser.Scene {
     this.updateEnemySymbolDepth(enemy);
     this.actionLog.add('ENEMY_LAURA_THEFT', {
       enemy: this.getEnemyLogName(enemy),
-      item: definition?.name ?? 'アイテム',
+      item: this.getItemLogName(item, definition),
     });
     return movement;
   }

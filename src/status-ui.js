@@ -140,7 +140,7 @@ class StatusUi {
     this.equipmentTexts.forEach((text, index) => {
       const equipment = this.equipmentCategories[index];
       const item = playerStatus.inventory.find((inventoryItem) => inventoryItem.equipped === equipment.category);
-      const name = item ? itemDefinitions.get(item.id)?.name ?? '' : '';
+      const name = item ? GameData.getItemName(item, itemDefinitions.get(item.id)) : '';
       const uses = equipment.category === 10 && item?.usesRemaining != null
         ? ` (${item.usesRemaining})`
         : '';

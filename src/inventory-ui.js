@@ -154,7 +154,7 @@ const InventoryUiBehavior = {
         : '';
       const recipeName = recipeResultDefinition
         ? `${recipeNamePrefix}　　のレシピ`
-        : definition?.name ?? '';
+        : item ? GameData.getItemName(item, definition) : '';
       const itemDisplayName = upgraded ? `★${recipeName}` : recipeName;
       const registeredRecipeLabel = definition?.category === 80 && registeredRecipeIds.has(definition.id)
         ? '（登録済）'
@@ -221,13 +221,16 @@ const InventoryUiBehavior = {
       const recipeRegistered = recipeDefinition && registeredRecipeIds.has(recipeDefinition.id);
       const materialId = recipe.materialIds.find((id) => id !== selectedDefinition.id) ?? selectedDefinition.id;
       const materialDefinition = this.itemDefinitions.get(materialId);
+      const materialItem = this.playerStatus.inventory.find((item) => item.id === materialId) ?? { id: materialId };
+      const materialName = GameData.getItemName(materialItem, materialDefinition);
+      const resultName = GameData.getItemName({ id: recipe.resultItemId }, resultDefinition);
       const oneLineLabel = recipeRegistered && materialDefinition && resultDefinition
-        ? `+ ${materialDefinition.name} = ${resultDefinition.name}`
+        ? `+ ${materialName} = ${resultName}`
         : '+ ??? = ???';
       text.setText(oneLineLabel);
       const wraps = recipeRegistered && text.width > listWidth - 20;
       const label = wraps
-        ? `+ ${materialDefinition.name}\n    = ${resultDefinition.name}`
+        ? `+ ${materialName}\n    = ${resultName}`
         : oneLineLabel;
       const rowHeight = wraps ? doubleLineHeight : singleLineHeight;
       const y = currentY;

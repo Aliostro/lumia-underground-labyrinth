@@ -39,6 +39,10 @@ class PlayerStatus {
     while (addedQuantity < quantity && this.inventory.length < this.inventoryCapacity) {
       const definition = itemDefinitions?.get(itemId);
       const item = { id: itemId };
+      if (GameData.hasItemCharge(item)) {
+        item.charge = GameData.getItemCharge(itemData);
+        item.chargeTurns = itemData?.chargeTurns ?? 0;
+      }
       if (definition?.category === 10 || definition?.category === 50) {
         item.usesRemaining = itemData?.usesRemaining ?? Phaser.Math.Between(
           definition.useCountMinimum,
@@ -58,6 +62,9 @@ class PlayerStatus {
   }
 
   equipItem(item, definition) {
+    if (GameData.hasItemCharge(item)) {
+      item.charge = Math.max(0, GameData.getItemCharge(item) - 1);
+    }
     this.inventory.forEach((inventoryItem) => {
       if (inventoryItem.equipped != null && inventoryItem.equipped === definition.category) {
         inventoryItem.equipped = null;
@@ -121,6 +128,10 @@ class PlayerStatus {
         return;
       }
       this.attack += Number(item.equipmentAttack) || 0;
+      if (item.equipmentEffectId === ITEM_EQUIP_EFFECT_CHARGED_ATTACK_INCREASE
+        && GameData.getItemCharge(item) > 0) {
+        this.attack += 30;
+      }
       this.defense += Number(item.equipmentDefense) || 0;
       equipmentMaxHitPointBonus += Number(item.equipmentMaxHitPointBonus) || 0;
       hasLifeStealMaxHitPointPenalty ||= item.equipmentEffectId === ITEM_EQUIP_EFFECT_LIFE_STEAL;
@@ -195,12 +206,24 @@ class PlayerStatus {
     this.gainExperience(this.getLevelStartExperience(targetLevel));
   }
 
-  advanceTurn(moved, hasCladRing = false) {
+  advanceTurn(moved, hasCladRing = false, recoveryBonus = 0, hasSlowHungerLoss = false, hasDoubleDamage = false) {
+    this.inventory.forEach((item) => {
+      if (!GameData.hasItemCharge(item) || item.equipped == null) {
+        return;
+      }
+      item.charge = GameData.getItemCharge(item);
+      item.chargeTurns = (item.chargeTurns ?? 0) + 1;
+      if (item.chargeTurns >= 10) {
+        item.charge = Math.max(0, item.charge - 1);
+        item.chargeTurns = 0;
+        this.updateEquipmentStats();
+      }
+    });
     if (this.hunger === 0) {
-      this.hitPoints = Math.max(0, this.hitPoints - 1);
+      this.hitPoints = Math.max(0, this.hitPoints - (hasDoubleDamage ? 2 : 1));
     } else {
       this.stepsSinceHungerLoss += 1;
-      if (this.stepsSinceHungerLoss === 10) {
+      if (this.stepsSinceHungerLoss >= (hasSlowHungerLoss ? 20 : 10)) {
         this.hunger -= 1;
         this.stepsSinceHungerLoss = 0;
       }
@@ -210,7 +233,7 @@ class PlayerStatus {
     }
 
     if (this.hunger > 0 && this.hitPoints < this.maxHitPoints && this.brandTurns === 0) {
-      this.recoveryProgress += this.maxHitPoints / 100 * (hasCladRing ? 3 : 1);
+      this.recoveryProgress += (this.maxHitPoints / 100 + recoveryBonus) * (hasCladRing ? 3 : 1);
       const recovery = Math.floor(this.recoveryProgress);
       this.hitPoints = Math.min(this.maxHitPoints, this.hitPoints + recovery);
       this.recoveryProgress -= recovery;
