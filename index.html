@@ -4,10 +4,16 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>ルミア島の地下迷宮</title>
-	<link rel="preconnect" href="https://fonts.googleapis.com">
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-	<link id="title-font-stylesheet" href="https://fonts.googleapis.com/css2?family=Yusei+Magic&display=swap" rel="stylesheet">
+	<link rel="preload" href="assets/font/YuseiMagic-Regular.ttf" as="font" type="font/ttf" crossorigin>
 	<style>
+		@font-face {
+			font-family: 'Yusei Magic';
+			src: url('assets/font/YuseiMagic-Regular.ttf') format('truetype');
+			font-style: normal;
+			font-weight: 400;
+			font-display: block;
+		}
+
 		* {
 			box-sizing: border-box;
 		}
@@ -114,12 +120,12 @@
 	<script src="src/game-constants.js?v=23"></script>
 	<script src="src/recipe-book.js?v=5"></script>
 	<script src="src/enemy-book.js?v=16"></script>
-	<script src="src/menu-scenes.js?v=41"></script>
+	<script src="src/menu-scenes.js?v=45"></script>
 	<script src="src/inventory-ui.js?v=3"></script>
 	<script src="src/enemy-system.js?v=7"></script>
 	<script src="src/enemy-abilities.js?v=22"></script>
 	<script src="src/lumi-system.js?v=2"></script>
 	<script src="src/turn-system.js?v=5"></script>
-	<script src="src/game.js?v=113"></script>
+	<script src="src/game.js?v=115"></script>
 </body>
 </html>

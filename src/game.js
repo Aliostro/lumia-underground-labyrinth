@@ -3390,9 +3390,14 @@ class DungeonTestScene extends Phaser.Scene {
       equipment,
     };
     if (succeeded) {
+      const clearedFilesBefore = getClearedDungeonFiles();
       const firstClear = markDungeonCleared(this.dungeonDataFile);
       if (firstClear) {
         result.unlockedSkin = getSkinUnlockedByDungeonClear(this.dungeonDataFile);
+        result.unlockedDungeons = DUNGEON_UNLOCK_REQUIREMENTS
+          .filter(({ file, requiredFile }) => requiredFile === this.dungeonDataFile
+            && !isDungeonUnlocked(file, clearedFilesBefore))
+          .map(({ file }) => file);
       }
       this.scene.start('ResultScene', result);
     } else {
@@ -7863,22 +7868,8 @@ const startGame = () => {
   }
 };
 
-const titleFontStylesheet = document.getElementById('title-font-stylesheet');
-const waitForTitleFontStylesheet = new Promise((resolve) => {
-  if (!titleFontStylesheet || titleFontStylesheet.sheet) {
-    resolve();
-    return;
-  }
-  titleFontStylesheet.addEventListener('load', resolve, { once: true });
-  titleFontStylesheet.addEventListener('error', resolve, { once: true });
-});
-
 if (document.fonts?.load) {
-  waitForTitleFontStylesheet
-    .then(() => document.fonts.load(
-      '56px "Yusei Magic"',
-      'ルミア島の地下迷宮踏破ホテル裏の下り階段レシピ図鑑完成実験体',
-    ))
+  document.fonts.load('56px "Yusei Magic"')
     .then(() => requestAnimationFrame(() => requestAnimationFrame(startGame)), startGame);
 } else {
   startGame();

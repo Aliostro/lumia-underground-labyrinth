@@ -10,9 +10,8 @@ const outputs = [
   { dungeon: '0001', file: 'dungeon-0001-monster-habitat.svg', maxFloor: 30 },
   { dungeon: '0002', file: 'dungeon-0002-monster-habitat.svg', maxFloor: 25 },
   { dungeon: '0003', file: 'dungeon-0003-monster-habitat.svg', maxFloor: 99 },
-  { dungeon: '0003', file: 'dungeon-0003-monster-habitat-secret.svg', maxFloor: 99 },
-  { dungeon: '0003', file: 'dungeon-0003-monster-habitat-0041.svg', maxFloor: 41 },
-  { dungeon: '0004', file: 'dungeon-0004-monster-habitat.svg', maxFloor: 50 }
+  { dungeon: '0004', file: 'dungeon-0004-monster-habitat.svg', maxFloor: 50 },
+  { dungeon: '0005', file: 'dungeon-0005-monster-habitat.svg', maxFloor: 50 }
 ];
 
 function parseCsv(text) {
