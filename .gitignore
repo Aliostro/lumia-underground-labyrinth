@@ -1,0 +1,12 @@
+assets/data/
+src/
+scripts/
+docs/
+node_modules/
+.release/
+.dev/
+package.json
+package-lock.json
+start.sh
+*.map
+*:Zone.Identifier*

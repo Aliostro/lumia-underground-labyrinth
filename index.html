@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>ルミア島の地下迷宮</title>
+	<link rel="preload" href="assets/font/YuseiMagic-Regular.ttf" as="font" type="font/ttf" crossorigin>
+	<style>
+		@font-face {
+			font-family: 'Yusei Magic';
+			src: url('assets/font/YuseiMagic-Regular.ttf') format('truetype');
+			font-style: normal;
+			font-weight: 400;
+			font-display: block;
+		}
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			min-width: 320px;
+			background: #111;
+			font-family: 'Yusei Magic', sans-serif;
+		}
+		#game-container { display: flex; justify-content: center; width: 100%; }
+		#game-container canvas { display: block; }
+		#initial-loading {
+			position: fixed; inset: 0; z-index: 10;
+			display: flex; flex-direction: column; align-items: center; justify-content: center;
+			gap: 20px; background: #101820; color: #f3f1e8;
+			transition: opacity 240ms ease-out, visibility 240ms ease-out;
+		}
+		#initial-loading.is-hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+		#initial-loading-title {
+			margin: 0; font-size: clamp(28px, 6vw, 56px); font-weight: 400;
+			letter-spacing: 0; text-align: center;
+		}
+		#initial-loading-status {
+			display: flex; align-items: center; gap: 10px; margin: 0;
+			font-size: 16px; color: #9ab5c7;
+		}
+		#initial-loading-spinner {
+			width: 18px; height: 18px;
+			border: 3px solid rgb(154 181 199 / 0.3);
+			border-top-color: #f0bb52; border-radius: 50%;
+			animation: initial-loading-spin 850ms linear infinite;
+		}
+		@keyframes initial-loading-spin { to { transform: rotate(360deg); } }
+	</style>
+</head>
+<body>
+	<div id="initial-loading" role="status" aria-live="polite" aria-label="ゲームを読み込み中">
+		<h1 id="initial-loading-title">ルミア島の地下迷宮</h1>
+		<p id="initial-loading-status"><span id="initial-loading-spinner" aria-hidden="true"></span><span id="initial-loading-message">迷宮を準備中</span></p>
+	</div>
+	<main id="game-container" aria-label="ルミア島の地下迷宮"></main>
+	<script src="assets/lib/phaser.min.js"></script>
+	<script src="assets/game.db367d8ab544.js"></script>
+</body>
+</html>
