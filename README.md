@@ -23,9 +23,29 @@ snapshot; earlier development history is no longer part of this branch.
 
 The build gzip-compresses the text data, bundles and obfuscates the JavaScript,
 disables developer flags, and does not publish source maps. Only generated
-HTML/JavaScript and runtime image/audio/font/library assets are published.
+HTML/JavaScript, media packs, and runtime font/library assets are copied to the
+distribution preview. Original image/audio files remain available locally;
+packaging does not remove files from earlier public commits.
 Third-party license text remains public. This discourages casual inspection;
 it is not encryption or protection against determined reverse engineering.
+
+## Packed Media
+
+- The build collects the actual scene asset queues and creates two compressed
+	packs: non-game screens/shared assets, and in-game-only assets. Shared files
+	occur in only one pack. Only referenced images/audio are included.
+- Title/background/book images, menu sounds, and title/result music are shared.
+	Dungeon music, combat sounds, and game-only images are loaded when entering
+	the game. Packs and internal entries use hashed names.
+- Phaser receives local Blob URLs after unpacking. Packs are fetched once per
+	game instance and reused across scene transitions. A failed pack stops loading
+	and asks for a page reload rather than falling back to individual asset URLs.
+- Development and release previews do not contain individual image/audio files.
+	Packing reduces individual HTTP requests; it does not prevent extraction.
+
+Run `npm run build:dev && npm run test:assets` to verify pack classification,
+exact asset reconstruction, scene loading, failure handling, and cache reuse
+without opening a browser.
 
 Keep a separate private backup of `assets/data/`, `src/`, `scripts/`,
 `package.json`, `package-lock.json`, and `start.sh`. A fresh clone of this
