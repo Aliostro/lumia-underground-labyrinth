@@ -47,6 +47,12 @@ Run `npm run build:dev && npm run test:assets` to verify pack classification,
 exact asset reconstruction, scene loading, failure handling, and cache reuse
 without opening a browser.
 
+Run `npm run test:dungeon` to verify maze dimensions, room entrances, loops,
+water/pond/river settings, deterministic generation, and existing layouts.
+
+Run `npm run test:enchantments` to verify enchantment crafting/inheritance,
+equipment stats, force-core effects, saved state, floor exchange, and prefix colors.
+
 Keep a separate private backup of `assets/data/`, `src/`, `scripts/`,
 `package.json`, `package-lock.json`, and `start.sh`. A fresh clone of this
 public repository can run the game but cannot recreate the editing environment.
