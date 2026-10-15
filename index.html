@@ -3,6 +3,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="lumia-api-base-url" content="https://219.94.240.199">
 	<title>ルミア島の地下迷宮</title>
 	<link rel="preload" href="assets/font/YuseiMagic-Regular.ttf" as="font" type="font/ttf" crossorigin>
 	<style>
@@ -44,6 +45,97 @@
 			animation: initial-loading-spin 850ms linear infinite;
 		}
 		@keyframes initial-loading-spin { to { transform: rotate(360deg); } }
+		.ranking-overlay {
+			position: fixed; left: 0; top: 0; z-index: 20; transform-origin: top left;
+			display: flex; align-items: center; justify-content: center;
+			background: rgb(0 0 0 / 0.75); color: #f3f1e8;
+		}
+		.ranking-panel {
+			width: 100%; height: 100%; overflow: hidden;
+			padding: 14px; background: #182831; border: 2px solid #ffdc4a;
+			font-size: 17px; line-height: 1.35;
+		}
+		.ranking-header { display: flex; align-items: center; gap: 12px; }
+		.ranking-header { justify-content: space-between; }
+		.ranking-header h2 { margin: 0; color: #ffdc4a; font-size: 24px; }
+		.ranking-content { margin-top: 12px; }
+		.ranking-panel button, .ranking-panel select, .ranking-panel input {
+			font: inherit; font-size: 17px; padding: 4px 8px;
+			background: #101820; color: #f3f1e8; border: 1px solid #607785; border-radius: 4px;
+		}
+		.ranking-panel button { cursor: pointer; }
+		.ranking-panel button:hover, .ranking-panel button[aria-pressed="true"] {
+			background: #384d58; border-color: #ffdc4a;
+		}
+		.ranking-panel :focus-visible { outline: 2px solid #ffdc4a; outline-offset: 2px; }
+		.ranking-panel input { display: block; width: min(100%, 420px); margin-top: 10px; }
+		.ranking-status { min-height: 18px; color: #9ab5c7; }
+		.ranking-browser {
+			display: flex; flex-direction: column;
+		}
+		.ranking-browser .ranking-header { flex-shrink: 0; }
+		.ranking-browser .ranking-content { flex: 1; min-height: 0; }
+		.ranking-workspace {
+			height: 100%; display: grid; grid-template-columns: minmax(180px, 27%) minmax(0, 1fr); gap: 14px;
+		}
+		.ranking-controls {
+			display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+			min-width: 0; min-height: 0; padding-right: 12px; border-right: 1px solid #607785;
+		}
+		.ranking-filter-group { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+		.ranking-filter-group + .ranking-filter-group { border-top: 1px solid #607785; padding-top: 6px; }
+		.ranking-filter-group h3 { margin: 0 0 2px; font-size: 16px; color: #9ab5c7; }
+		.ranking-filter-group[data-active="true"] h3 { color: #ffdc4a; }
+		.ranking-filter-group button { text-align: left; padding: 2px 5px; font-size: 16px; line-height: 1.2; }
+		.ranking-help { color: #9ab5c7; font-size: 12px; margin: 0; }
+		.ranking-right { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+		.ranking-right .ranking-status { margin: 0 0 6px; flex-shrink: 0; font-size: 13px; }
+		.ranking-results { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+		.ranking-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; flex-shrink: 0; font-size: 16px; }
+		.ranking-pager[hidden] { display: none; }
+		.ranking-panel button:disabled { color: #607785; cursor: default; }
+		.ranking-results table { width: 100%; table-layout: fixed; border-collapse: collapse; white-space: nowrap; }
+		.ranking-results th { position: sticky; top: 0; background: #182831; text-align: left; }
+		.ranking-results td, .ranking-results th { padding: 4px 6px; border-bottom: 1px solid #607785; }
+		.ranking-results td { overflow: hidden; text-overflow: ellipsis; }
+		.ranking-results tr:focus-within { background: #384d58; }
+		.ranking-results button { font-size: 16px; padding: 3px 6px; }
+		.ranking-primary-score { color: #ffdc4a; }
+		.ranking-player { display: flex; align-items: center; gap: 10px; min-width: 0; }
+		.ranking-player-name { display: inline-block; min-width: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+		.ranking-icon {
+			display: inline-block; width: 40px; height: 40px; flex-shrink: 0;
+			background: #000; border: 1px solid #607785; vertical-align: middle;
+		}
+		.ranking-icon img { display: block; width: 100%; height: 100%; object-fit: contain; }
+		.ranking-pre { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; }
+		.ranking-detail-panel { display: flex; flex-direction: column; }
+		.ranking-detail-panel .ranking-header { flex-shrink: 0; }
+		.ranking-detail-panel .ranking-content { flex: 1; min-height: 0; display: flex; }
+		.ranking-detail-viewport { flex: 1; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
+		.ranking-detail-sheet { position: absolute; top: 0; width: 100%; transform-origin: top left; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; overflow-wrap: anywhere; }
+		.ranking-detail-sheet h3, .ranking-detail-sheet h4, .ranking-detail-sheet p { margin: 0 0 6px; }
+		.ranking-detail-sheet h3 { font-size: 19px; }
+		.ranking-detail-sheet h4 { font-size: 16px; color: #9ab5c7; }
+		.ranking-detail-heading, .ranking-detail-scores, .ranking-detail-footer { grid-column: 1 / -1; }
+		.ranking-detail-heading > h3:first-child { display: flex; align-items: center; gap: 12px; }
+		.ranking-detail-heading .ranking-icon { width: 72px; height: 72px; }
+		.ranking-detail-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+		.ranking-detail-scores section { padding: 8px; border: 1px solid #607785; text-align: center; }
+		.ranking-detail-scores p { color: #ffdc4a; }
+		.ranking-detail-footer { font-size: 13px; color: #9ab5c7; }
+		.ranking-icon-picker-panel { width: 520px; height: auto; max-height: calc(100% - 48px); padding: 24px; }
+		.ranking-icon-picker-panel .ranking-content { display: flex; flex-direction: column; gap: 12px; }
+		.ranking-icon-viewport { height: 448px; overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; }
+		.ranking-icon-grid { position: relative; display: grid; grid-template-columns: repeat(5, 80px); grid-auto-rows: 80px; gap: 12px; justify-content: center; }
+		.ranking-icon-choice { display: flex; align-items: center; justify-content: center; }
+		.ranking-icon-choice .ranking-icon { width: 64px; height: 64px; }
+		.ranking-icon-status { min-height: 18px; margin: 0; color: #ffdc4a; font-size: 13px; }
+		.option-profile-input {
+			position: fixed; z-index: 15; margin: 0; padding: 4px 8px; min-width: 0;
+			font-family: 'Yusei Magic', sans-serif; color: #f3f1e8; background: #101820;
+			border: 2px solid #607785; border-radius: 4px; outline: none;
+		}
 	</style>
 </head>
 <body>
@@ -53,6 +145,6 @@
 	</div>
 	<main id="game-container" aria-label="ルミア島の地下迷宮"></main>
 	<script src="assets/lib/phaser.min.js"></script>
-	<script src="assets/game.e9a03b29390e.js"></script>
+	<script src="assets/game.f94843411d08.js"></script>
 </body>
 </html>
